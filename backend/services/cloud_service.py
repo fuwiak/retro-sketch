@@ -147,6 +147,11 @@ class CloudService:
                                                         'url': download_url,
                                                         'download_url': download_url
                                                     })
+                                                    
+                                                    # Stop if we've reached max_files limit
+                                                    if max_files and len(files) >= max_files:
+                                                        api_logger.debug(f"Reached max_files limit ({max_files}), stopping file parsing")
+                                                        break
                             except Exception as e:
                                 api_logger.debug(f"Error parsing list array: {str(e)}")
                                 pass
@@ -191,6 +196,11 @@ class CloudService:
                                 'download_url': file_url,
                                 'path': ''
                             })
+                            
+                            # Stop if we've reached max_files limit
+                            if max_files and len(files) >= max_files:
+                                api_logger.debug(f"Reached max_files limit ({max_files}) in Approach 2")
+                                break
                 
                 # Also try generic links
                 if not files:
@@ -217,6 +227,11 @@ class CloudService:
                                 'download_url': file_url,
                                 'path': ''
                             })
+                            
+                            # Stop if we've reached max_files limit
+                            if max_files and len(files) >= max_files:
+                                api_logger.debug(f"Reached max_files limit ({max_files}) in Approach 2 links")
+                                break
             
             # Approach 3: Try Mail.ru Cloud API with proper structure
             if not files:
@@ -233,15 +248,21 @@ class CloudService:
                         if api_response.status_code == 200:
                             data = api_response.json()
                             # Try different response structures
+                            remaining_limit = max_files - len(files) if max_files else None
                             if 'body' in data:
                                 if 'list' in data['body']:
-                                    files.extend(self._parse_api_files(data['body']['list'], url))
+                                    files.extend(self._parse_api_files(data['body']['list'], url, remaining_limit))
                                 elif 'items' in data['body']:
-                                    files.extend(self._parse_api_files(data['body']['items'], url))
+                                    files.extend(self._parse_api_files(data['body']['items'], url, remaining_limit))
                             elif 'list' in data:
-                                files.extend(self._parse_api_files(data['list'], url))
+                                files.extend(self._parse_api_files(data['list'], url, remaining_limit))
                             elif 'items' in data:
-                                files.extend(self._parse_api_files(data['items'], url))
+                                files.extend(self._parse_api_files(data['items'], url, remaining_limit))
+                            
+                            # Stop if we've reached max_files limit
+                            if max_files and len(files) >= max_files:
+                                api_logger.debug(f"Reached max_files limit ({max_files}) in Approach 3 API")
+                                break
                             
                             if files:
                                 break
@@ -278,10 +299,15 @@ class CloudService:
                 })
         return files
     
-    def _parse_api_files(self, file_list: List, base_url: str) -> List[Dict]:
+    def _parse_api_files(self, file_list: List, base_url: str, max_files: int = None) -> List[Dict]:
         """Parse files from API response"""
         files = []
         for item in file_list:
+            # Stop if we've reached max_files limit
+            if max_files and len(files) >= max_files:
+                api_logger.debug(f"Reached max_files limit ({max_files}) in _parse_api_files")
+                break
+                
             if isinstance(item, dict):
                 name = item.get('name', '')
                 path = item.get('path', '')
