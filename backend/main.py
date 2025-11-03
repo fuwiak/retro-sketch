@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 from services.ocr_service import OCRService
 from services.translation_service import TranslationService
 from services.export_service import ExportService
+from services.cloud_service import CloudService
 from services.logger import api_logger, log_api_request, log_api_response
 
 # Load environment variables
@@ -42,6 +43,7 @@ app.add_middleware(
 ocr_service = OCRService()
 translation_service = TranslationService()
 export_service = ExportService()
+cloud_service = CloudService()
 
 # Frontend static files configuration
 # Check if frontend dist directory exists (for Railway deployment)
@@ -240,6 +242,48 @@ async def export_xlsx(data: ExportData):
             detail=f"XLSX export failed: {str(e)}"
         )
 
+
+# ========== CLOUD FOLDER API ==========
+class CloudFolderRequest(BaseModel):
+    url: str
+
+class CloudFileRequest(BaseModel):
+    url: str
+    fileName: str
+
+@app.post("/api/cloud/folder")
+async def get_cloud_folder(request: CloudFolderRequest):
+    """Get folder structure from Mail.ru Cloud"""
+    log_api_request("POST", "/api/cloud/folder", {"url": request.url})
+    
+    try:
+        folder_data = cloud_service.parse_mailru_folder(request.url)
+        log_api_response("POST", "/api/cloud/folder", 200, {"files_count": len(folder_data.get('files', []))})
+        return folder_data
+    except Exception as e:
+        api_logger.error(f"Error getting cloud folder: {str(e)}")
+        log_api_response("POST", "/api/cloud/folder", 500, {"error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Failed to load folder: {str(e)}")
+
+@app.post("/api/cloud/file")
+async def get_cloud_file(request: CloudFileRequest):
+    """Download file from cloud URL"""
+    log_api_request("POST", "/api/cloud/file", {"url": request.url, "fileName": request.fileName})
+    
+    try:
+        file_content = cloud_service.download_file(request.url)
+        log_api_response("POST", "/api/cloud/file", 200, {"file_size": len(file_content)})
+        return Response(
+            content=file_content,
+            media_type="application/octet-stream",
+            headers={
+                "Content-Disposition": f'attachment; filename="{request.fileName}"'
+            }
+        )
+    except Exception as e:
+        api_logger.error(f"Error downloading cloud file: {str(e)}")
+        log_api_response("POST", "/api/cloud/file", 500, {"error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Failed to download file: {str(e)}")
 
 @app.post("/api/export/pdf")
 async def export_pdf(
