@@ -793,7 +793,11 @@ function getCroppedImage() {
 
 // Polygon crop handlers
 els.pdfCanvas.addEventListener("click", (e) => {
-  if (!cropMode || cropModeType !== 'polygon' || isPolygonComplete) return;
+  console.log('Canvas click:', { cropMode, cropModeType, isPolygonComplete, canvasWidth: els.pdfCanvas.width });
+  if (!cropMode || cropModeType !== 'polygon' || isPolygonComplete) {
+    console.log('Click ignored - conditions not met');
+    return;
+  }
   
   const rect = els.pdfCanvas.getBoundingClientRect();
   const scaleX = els.pdfCanvas.width / rect.width;
