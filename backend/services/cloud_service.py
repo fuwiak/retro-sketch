@@ -47,21 +47,93 @@ class CloudService:
             # Try to find file listings in the page
             # Mail.ru Cloud structure may vary, so we try multiple approaches
             
-            # Approach 1: Look for script tags with JSON data
+            # Approach 1: Look for script tags with JSON data (window.__INITIAL_STATE__ or list array)
             scripts = soup.find_all('script')
             for script in scripts:
                 if script.string:
-                    # Look for file data in JavaScript
-                    if 'files' in script.string.lower() or 'items' in script.string.lower():
-                        # Try to extract JSON
-                        json_match = re.search(r'\{.*"files".*\}', script.string, re.DOTALL)
-                        if json_match:
+                    script_content = script.string
+                    
+                    # Try to find window.__INITIAL_STATE__ or similar
+                    json_patterns = [
+                        r'window\.__INITIAL_STATE__\s*=\s*(\{.*?\});',
+                        r'window\.__DATA__\s*=\s*(\{.*?\});',
+                        r'var\s+__INITIAL_STATE__\s*=\s*(\{.*?\});',
+                    ]
+                    
+                    for pattern in json_patterns:
+                        match = re.search(pattern, script_content, re.DOTALL)
+                        if match:
                             try:
                                 import json
-                                data = json.loads(json_match.group(0))
+                                data = json.loads(match.group(1))
+                                # Look for files in nested structure
                                 if 'files' in data:
                                     files.extend(self._parse_json_files(data['files'], url))
+                                elif 'body' in data and 'files' in data['body']:
+                                    files.extend(self._parse_json_files(data['body']['files'], url))
                             except:
+                                pass
+                    
+                    # Look for "list" array with folder/file structure
+                    if 'weblink' in script_content.lower() and 'list' in script_content.lower():
+                        # Find the list array
+                        list_match = re.search(r'"list"\s*:\s*(\[.*?\])', script_content, re.DOTALL)
+                        if list_match:
+                            try:
+                                import json
+                                # Try to extract full array
+                                start_idx = script_content.find('"list"')
+                                if start_idx != -1:
+                                    array_start = script_content.find('[', start_idx)
+                                    if array_start != -1:
+                                        # Find matching closing bracket
+                                        bracket_count = 1
+                                        array_end = array_start + 1
+                                        for i in range(array_start + 1, len(script_content)):
+                                            if script_content[i] == '[':
+                                                bracket_count += 1
+                                            elif script_content[i] == ']':
+                                                bracket_count -= 1
+                                                if bracket_count == 0:
+                                                    array_end = i + 1
+                                                    break
+                                        
+                                        array_str = script_content[array_start:array_end]
+                                        list_data = json.loads(array_str)
+                                        
+                                        # Parse items from list
+                                        for item in list_data:
+                                            if isinstance(item, dict):
+                                                item_type = item.get('type') or item.get('kind', '')
+                                                item_name = item.get('name', '')
+                                                item_weblink = item.get('weblink', '')
+                                                item_count = item.get('count', {})
+                                                
+                                                # Build URL
+                                                if item_weblink:
+                                                    item_url = f"https://cloud.mail.ru/public/{item_weblink}"
+                                                else:
+                                                    item_url = f"{url}/{item_name}"
+                                                
+                                                # If it's a folder, we can list it and potentially recurse later
+                                                if item_type == 'folder':
+                                                    # Store folder info - frontend can use this to navigate
+                                                    # For now, we'll try to fetch files from this folder
+                                                    folder_files = self._fetch_folder_files(item_url, item_name)
+                                                    files.extend(folder_files)
+                                                # If it's a file
+                                                elif item_type == 'file' or (item_type != 'folder' and item_name):
+                                                    # Build download URL
+                                                    download_url = item_url
+                                                    
+                                                    files.append({
+                                                        'name': item_name,
+                                                        'path': '',
+                                                        'url': download_url,
+                                                        'download_url': download_url
+                                                    })
+                            except Exception as e:
+                                api_logger.debug(f"Error parsing list array: {str(e)}")
                                 pass
             
             # Approach 2: Parse HTML - look for file items in Mail.ru Cloud structure
@@ -205,6 +277,67 @@ class CloudService:
                     'url': download_url,
                     'download_url': download_url
                 })
+        return files
+    
+    def _fetch_folder_files(self, folder_url: str, folder_name: str) -> List[Dict]:
+        """Fetch files from a subfolder (recursive)"""
+        files = []
+        try:
+            api_logger.debug(f"Fetching files from folder: {folder_url}")
+            response = self.session.get(folder_url, timeout=10)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            scripts = soup.find_all('script')
+            
+            for script in scripts:
+                if script.string and 'list' in script.string.lower():
+                    script_content = script.string
+                    start_idx = script_content.find('"list"')
+                    if start_idx != -1:
+                        array_start = script_content.find('[', start_idx)
+                        if array_start != -1:
+                            bracket_count = 1
+                            array_end = array_start + 1
+                            for i in range(array_start + 1, len(script_content)):
+                                if script_content[i] == '[':
+                                    bracket_count += 1
+                                elif script_content[i] == ']':
+                                    bracket_count -= 1
+                                    if bracket_count == 0:
+                                        array_end = i + 1
+                                        break
+                            
+                            try:
+                                import json
+                                array_str = script_content[array_start:array_end]
+                                list_data = json.loads(array_str)
+                                
+                                for item in list_data:
+                                    if isinstance(item, dict):
+                                        item_type = item.get('type') or item.get('kind', '')
+                                        item_name = item.get('name', '')
+                                        item_weblink = item.get('weblink', '')
+                                        
+                                        # Only get files, not subfolders (for now)
+                                        if item_type == 'file' or (item_type != 'folder' and item_name):
+                                            if item_weblink:
+                                                download_url = f"https://cloud.mail.ru/public/{item_weblink}"
+                                            else:
+                                                download_url = f"{folder_url}/{item_name}"
+                                            
+                                            files.append({
+                                                'name': item_name,
+                                                'path': folder_name,  # Store parent folder name
+                                                'url': download_url,
+                                                'download_url': download_url
+                                            })
+                                break
+                            except:
+                                pass
+        except Exception as e:
+            api_logger.debug(f"Error fetching folder files: {str(e)}")
+        
         return files
     
     def download_file(self, url: str) -> bytes:

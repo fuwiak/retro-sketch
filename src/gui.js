@@ -803,9 +803,9 @@ els.pdfCanvas.addEventListener("click", (e) => {
   console.log('Canvas click:', { cropMode, cropModeType, isPolygonComplete, canvasWidth: els.pdfCanvas.width });
   if (!cropMode || cropModeType !== 'polygon' || isPolygonComplete) {
     console.log('Click ignored - conditions not met');
-    return;
-  }
-  
+      return;
+    }
+
   const rect = els.pdfCanvas.getBoundingClientRect();
   const scaleX = els.pdfCanvas.width / rect.width;
   const scaleY = els.pdfCanvas.height / rect.height;
@@ -1452,7 +1452,7 @@ els.modalSearch.addEventListener("input", (e) => {
   if (val) {
     const regex = new RegExp(`(${val})`, 'gi');
     els.modalData.innerHTML = content.replace(regex, '<mark style="background: var(--ui-color); color: #000;">$1</mark>');
-  } else {
+} else {
     els.modalData.innerHTML = content;
   }
 });
@@ -1460,8 +1460,8 @@ els.modalSearch.addEventListener("input", (e) => {
 // ========== CLOUD FOLDER DRAWER ==========
 els.cloudFolderToggle.addEventListener("click", () => {
   els.cloudFolderDrawer.classList.toggle("open");
-  playClick(400);
-});
+    playClick(400);
+  });
 
 // Load cloud folder structure
 async function loadCloudFolder(url) {
@@ -1505,26 +1505,26 @@ function renderCloudFolder(data) {
   
   let html = '';
   
-  // Group files by folder
+  // Group files by folder (using path attribute)
   const folders = {};
   const rootFiles = [];
   
   data.files.forEach(file => {
-    const pathParts = file.path ? file.path.split('/').filter(p => p) : [];
-    if (pathParts.length > 1) {
-      const folderName = pathParts[0];
+    // file.path contains folder name (e.g., "0002", "0003")
+    if (file.path && file.path.trim()) {
+      const folderName = file.path;
       if (!folders[folderName]) {
         folders[folderName] = [];
       }
-      folders[folderName].push({ ...file, name: pathParts[pathParts.length - 1] });
+      folders[folderName].push(file);
     } else {
       rootFiles.push(file);
     }
   });
   
-  // Render folders
+  // Render folders with their files
   Object.keys(folders).sort().forEach(folderName => {
-    html += `<div class="cloud-folder-item" style="font-weight: bold;">📁 ${folderName}</div>`;
+    html += `<div class="cloud-folder-item" style="font-weight: bold; margin-top: 10px;">📁 ${folderName}</div>`;
     folders[folderName].forEach(file => {
       const icon = file.name.match(/\.(pdf|png|jpg|jpeg)$/i) ? 
         (file.name.match(/\.pdf$/i) ? '📄' : '🖼️') : '📄';
