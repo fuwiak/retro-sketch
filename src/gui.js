@@ -1473,14 +1473,24 @@ async function loadCloudFolder(url) {
   els.cloudFolderStatus.textContent = '⏳ Loading folder...';
   els.cloudFolderContent.innerHTML = '';
   
+  // Declare endpointUrl outside try block for error handling
+  let endpointUrl = '';
+  
   try {
     // Use backend proxy to fetch folder structure (CORS issue)
     // Note: getApiBaseUrl() already includes /api, so we don't add it again
     const apiUrl = getApiBaseUrl();
-    const endpointUrl = `${apiUrl}/cloud/folder`;
+    endpointUrl = `${apiUrl}/cloud/folder`;
+    
+    // Force HTTPS if current page is HTTPS
+    if (window.location.protocol === 'https:' && endpointUrl.startsWith('http:')) {
+      endpointUrl = endpointUrl.replace('http:', 'https:');
+    }
+    
     console.log('Fetching from:', endpointUrl);
     console.log('API Base URL:', apiUrl);
     console.log('Request URL:', url);
+    console.log('Window API_BASE_URL:', window.API_BASE_URL);
     
     // Add timeout and error handling
     const controller = new AbortController();
@@ -1523,7 +1533,7 @@ async function loadCloudFolder(url) {
       errorMessage = 'Request timeout - folder is too large or server is slow. This may take a while...';
     } else if (error.message === 'Failed to fetch') {
       // Check for Mixed Content error
-      if (window.location.protocol === 'https:' && endpointUrl.startsWith('http:')) {
+      if (window.location.protocol === 'https:' && endpointUrl && endpointUrl.startsWith('http:')) {
         errorMessage = 'Mixed Content Error: HTTPS page cannot access HTTP API. Please use HTTPS for API.';
       } else {
         errorMessage = 'Cannot connect to server. Check if backend is running and accessible.';
@@ -1535,7 +1545,8 @@ async function loadCloudFolder(url) {
       Failed to load folder.<br/>
       Error: ${errorMessage}<br/>
       <small>Check browser console (F12) for details</small><br/>
-      <small>API URL: ${endpointUrl || 'N/A'}</small>
+      <small>API URL: ${endpointUrl || 'N/A'}</small><br/>
+      <small>Window API_BASE_URL: ${window.API_BASE_URL || 'N/A'}</small>
     </div>`;
   }
 }

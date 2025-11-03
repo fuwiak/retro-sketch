@@ -346,9 +346,19 @@ if FRONTEND_DIR.exists():
             # Auto-detect API URL from request
             # Ensure HTTPS in production (fix Mixed Content error)
             base_url = str(request.base_url).rstrip("/")
-            # If request came via HTTPS proxy but base_url is HTTP, fix it
-            if request.url.scheme == 'https' and base_url.startswith('http://'):
+            
+            # Check if request came via HTTPS (Railway uses proxy with X-Forwarded-Proto)
+            is_https = (
+                request.url.scheme == 'https' or
+                request.headers.get('X-Forwarded-Proto') == 'https' or
+                request.headers.get('X-Forwarded-Ssl') == 'on' or
+                'railway.app' in str(request.base_url)  # Railway domains should use HTTPS
+            )
+            
+            # Force HTTPS if needed
+            if is_https and base_url.startswith('http://'):
                 base_url = base_url.replace('http://', 'https://', 1)
+            
             api_url = f"{base_url}/api"
             
             # Inject API URL into HTML as window variable
