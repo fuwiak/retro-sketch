@@ -68,10 +68,17 @@ class CloudService:
                                 import json
                                 data = json.loads(match.group(1))
                                 # Look for files in nested structure
+                                remaining_limit = max_files - len(files) if max_files else None
                                 if 'files' in data:
-                                    files.extend(self._parse_json_files(data['files'], url))
+                                    parsed = self._parse_json_files(data['files'], url, remaining_limit)
+                                    files.extend(parsed)
+                                    if max_files and len(files) >= max_files:
+                                        break
                                 elif 'body' in data and 'files' in data['body']:
-                                    files.extend(self._parse_json_files(data['body']['files'], url))
+                                    parsed = self._parse_json_files(data['body']['files'], url, remaining_limit)
+                                    files.extend(parsed)
+                                    if max_files and len(files) >= max_files:
+                                        break
                             except:
                                 pass
                     
