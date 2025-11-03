@@ -261,33 +261,26 @@ async def get_cloud_folder(request: CloudFolderRequest):
     try:
         import asyncio
         import concurrent.futures
-        # Run in executor with timeout to prevent Railway timeout (max 60s)
-        # Use shorter timeout to give Railway time to respond
-        # Use ThreadPoolExecutor for CPU-bound or blocking I/O operations
+        
+        # Simple approach: parse ALL files first, then paginate
+        # This is simpler and more reliable
         loop = asyncio.get_event_loop()
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            # Parse with pagination - limit how many files we process
-            # We need to parse at least offset + limit files to know if there are more
-            # But we can stop early if we've found enough
-            max_files_to_parse = request.offset + request.limit + 1  # +1 to check if there are more
             folder_data = await asyncio.wait_for(
                 loop.run_in_executor(
                     executor, 
                     cloud_service.parse_mailru_folder, 
-                    request.url,
-                    max_files_to_parse  # Stop parsing after this many files
+                    request.url
                 ),
-                timeout=30.0  # Reduced timeout since we're processing fewer files
+                timeout=20.0  # 20 seconds should be enough for most folders
             )
         
         files = folder_data.get('files', [])
         total_files = len(files)
         
-        # Apply pagination - return only the requested slice
+        # Apply pagination AFTER parsing
         paginated_files = files[request.offset:request.offset + request.limit]
-        # If we parsed max_files_to_parse files, there might be more
-        # If we parsed fewer, we've reached the end
-        has_more = total_files >= max_files_to_parse
+        has_more = (request.offset + request.limit) < total_files
         
         result = {
             'files': paginated_files,

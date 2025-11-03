@@ -19,14 +19,14 @@ class CloudService:
             'Upgrade-Insecure-Requests': '1'
         })
     
-    def parse_mailru_folder(self, url: str, max_files: int = None) -> Dict:
+    def parse_mailru_folder(self, url: str) -> Dict:
         """
         Parse Mail.ru Cloud public folder URL
         Returns list of files with their download URLs
-        max_files: Stop parsing after finding this many files (for pagination)
+        Simple approach: parse everything, pagination happens in API layer
         """
         try:
-            api_logger.info(f"Fetching Mail.ru Cloud folder: {url} (max_files={max_files})")
+            api_logger.info(f"Fetching Mail.ru Cloud folder: {url}")
             
             # Extract folder hash from URL
             # Format: https://cloud.mail.ru/public/ZVeV/Mq5HoaFGX
@@ -68,17 +68,10 @@ class CloudService:
                                 import json
                                 data = json.loads(match.group(1))
                                 # Look for files in nested structure
-                                remaining_limit = max_files - len(files) if max_files else None
                                 if 'files' in data:
-                                    parsed = self._parse_json_files(data['files'], url, remaining_limit)
-                                    files.extend(parsed)
-                                    if max_files and len(files) >= max_files:
-                                        break
+                                    files.extend(self._parse_json_files(data['files'], url))
                                 elif 'body' in data and 'files' in data['body']:
-                                    parsed = self._parse_json_files(data['body']['files'], url, remaining_limit)
-                                    files.extend(parsed)
-                                    if max_files and len(files) >= max_files:
-                                        break
+                                    files.extend(self._parse_json_files(data['body']['files'], url))
                             except:
                                 pass
                     
@@ -203,11 +196,6 @@ class CloudService:
                                 'download_url': file_url,
                                 'path': ''
                             })
-                            
-                            # Stop if we've reached max_files limit
-                            if max_files and len(files) >= max_files:
-                                api_logger.debug(f"Reached max_files limit ({max_files}) in Approach 2")
-                                break
                 
                 # Also try generic links
                 if not files:
@@ -234,11 +222,6 @@ class CloudService:
                                 'download_url': file_url,
                                 'path': ''
                             })
-                            
-                            # Stop if we've reached max_files limit
-                            if max_files and len(files) >= max_files:
-                                api_logger.debug(f"Reached max_files limit ({max_files}) in Approach 2 links")
-                                break
             
             # Approach 3: Try Mail.ru Cloud API with proper structure
             if not files:
@@ -255,21 +238,15 @@ class CloudService:
                         if api_response.status_code == 200:
                             data = api_response.json()
                             # Try different response structures
-                            remaining_limit = max_files - len(files) if max_files else None
                             if 'body' in data:
                                 if 'list' in data['body']:
-                                    files.extend(self._parse_api_files(data['body']['list'], url, remaining_limit))
+                                    files.extend(self._parse_api_files(data['body']['list'], url))
                                 elif 'items' in data['body']:
-                                    files.extend(self._parse_api_files(data['body']['items'], url, remaining_limit))
+                                    files.extend(self._parse_api_files(data['body']['items'], url))
                             elif 'list' in data:
-                                files.extend(self._parse_api_files(data['list'], url, remaining_limit))
+                                files.extend(self._parse_api_files(data['list'], url))
                             elif 'items' in data:
-                                files.extend(self._parse_api_files(data['items'], url, remaining_limit))
-                            
-                            # Stop if we've reached max_files limit
-                            if max_files and len(files) >= max_files:
-                                api_logger.debug(f"Reached max_files limit ({max_files}) in Approach 3 API")
-                                break
+                                files.extend(self._parse_api_files(data['items'], url))
                             
                             if files:
                                 break
@@ -277,27 +254,17 @@ class CloudService:
                         api_logger.debug(f"API endpoint {api_url} failed: {str(e)}")
                         continue
             
-            # Truncate to max_files if specified
-            if max_files and len(files) > max_files:
-                files = files[:max_files]
-                api_logger.info(f"Found {len(files)} files in folder (truncated to max_files={max_files})")
-            else:
-                api_logger.info(f"Found {len(files)} files in folder")
+            api_logger.info(f"Found {len(files)} files in folder")
             return {'files': files, 'folder_url': url}
             
         except Exception as e:
             api_logger.error(f"Error parsing Mail.ru Cloud folder: {str(e)}")
             raise
     
-    def _parse_json_files(self, file_list: List, base_url: str, max_files: int = None) -> List[Dict]:
+    def _parse_json_files(self, file_list: List, base_url: str) -> List[Dict]:
         """Parse files from JSON structure"""
         files = []
         for item in file_list:
-            # Stop if we've reached max_files limit
-            if max_files and len(files) >= max_files:
-                api_logger.debug(f"Reached max_files limit ({max_files}) in _parse_json_files")
-                break
-                
             if isinstance(item, dict):
                 name = item.get('name', '')
                 path = item.get('path', '')
@@ -311,15 +278,10 @@ class CloudService:
                 })
         return files
     
-    def _parse_api_files(self, file_list: List, base_url: str, max_files: int = None) -> List[Dict]:
+    def _parse_api_files(self, file_list: List, base_url: str) -> List[Dict]:
         """Parse files from API response"""
         files = []
         for item in file_list:
-            # Stop if we've reached max_files limit
-            if max_files and len(files) >= max_files:
-                api_logger.debug(f"Reached max_files limit ({max_files}) in _parse_api_files")
-                break
-                
             if isinstance(item, dict):
                 name = item.get('name', '')
                 path = item.get('path', '')
@@ -337,10 +299,8 @@ class CloudService:
                 })
         return files
     
-    def _fetch_folder_files(self, folder_url: str, folder_name: str, max_files: int = None) -> List[Dict]:
-        """Fetch files from a subfolder (recursive)
-        max_files: Stop fetching after this many files (for pagination)
-        """
+    def _fetch_folder_files(self, folder_url: str, folder_name: str) -> List[Dict]:
+        """Fetch files from a subfolder (recursive)"""
         files = []
         try:
             api_logger.debug(f"Fetching files from folder: {folder_url}")
