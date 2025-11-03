@@ -250,13 +250,49 @@
         color: #000;
         transform: translateY(-50%) scale(1.05);
       }
+      /* CLOUD FOLDER DRAWER */
+      #cloudFolderToggle {
+        position: fixed;
+        top: 5px;
+        left: 10px;
+        border: 1px solid var(--ui-color);
+        color: var(--ui-color);
+        background: rgba(0, 0, 0, 0.6);
+        font-size: 0.8rem;
+        padding: 3px 8px;
+        cursor: pointer;
+        text-shadow: 0 0 4px var(--ui-color);
+        z-index: 120;
+        transition: all 0.3s ease;
+      }
       #cloudFolderToggle:hover {
         background: var(--ui-color);
         color: #000;
-        transform: translateY(-50%) scale(1.05);
+        transform: scale(1.05);
+      }
+      #cloudFolderDrawer {
+        position: fixed;
+        left: 10px;
+        top: -600px;
+        width: 400px;
+        height: 600px;
+        background: rgba(0, 0, 0, 0.95);
+        border: 1px solid var(--ui-color);
+        box-shadow: 0 0 12px var(--ui-color);
+        padding: 0.5rem;
+        transition: top 0.4s ease;
+        z-index: 115;
+        display: flex;
+        flex-direction: column;
       }
       #cloudFolderDrawer.open {
-        right: 10px;
+        top: 40px;
+      }
+      #cloudFolderDrawer h2 {
+        font-size: 0.9rem;
+        border-bottom: 1px solid var(--ui-color);
+        text-align: center;
+        margin-bottom: 5px;
       }
       .cloud-folder-item {
         padding: 5px;
@@ -692,12 +728,14 @@
     </div>
 
     <!-- CLOUD FOLDER DRAWER -->
-    <div id="cloudFolderToggle" style="position: fixed; top: 20%; right: 10px; transform: translateY(-50%); border: 1px solid var(--ui-color); color: var(--ui-color); background: rgba(0, 0, 0, 0.6); font-size: 0.8rem; padding: 3px 8px; cursor: pointer; text-shadow: 0 0 4px var(--ui-color); z-index: 120; transition: all 0.3s ease; writing-mode: vertical-rl; text-orientation: mixed;">☁️ FOLDERS</div>
-    <div id="cloudFolderDrawer" style="position: fixed; right: -500px; top: 50%; transform: translateY(-50%); width: 500px; height: 600px; background: rgba(0, 0, 0, 0.95); border: 1px solid var(--ui-color); box-shadow: 0 0 12px var(--ui-color); padding: 0.5rem; transition: right 0.4s ease; z-index: 115; display: flex; flex-direction: column;">
-      <h2 style="font-size: 0.9rem; border-bottom: 1px solid var(--ui-color); text-align: center; margin-bottom: 5px;">☁️ CLOUD FOLDERS</h2>
+    <div id="cloudFolderToggle">☁️ FOLDERS</div>
+    <div id="cloudFolderDrawer">
+      <h2>☁️ CLOUD FOLDERS</h2>
       <div style="margin-bottom: 10px;">
-        <input id="cloudFolderUrl" type="text" placeholder="Mail.ru Cloud URL" value="https://cloud.mail.ru/public/ZVeV/Mq5HoaFGX" style="width: 100%; background: rgba(0, 0, 0, 0.8); border: 1px solid var(--ui-color); color: var(--ui-color); padding: 5px; font-family: inherit; font-size: 0.75rem; box-sizing: border-box; margin-bottom: 5px;" />
-        <button id="loadCloudFolderBtn" style="width: 100%; background: rgba(0, 0, 0, 0.8); border: 1px solid var(--ui-color); color: var(--ui-color); padding: 5px; font-family: inherit; font-size: 0.75rem; cursor: pointer;">📥 Load Folder</button>
+        <input id="cloudFolderUrl" type="text" placeholder="Mail.ru Cloud URL" value="https://cloud.mail.ru/public/ZVeV/Mq5HoaFGX" style="width: 100%; background: rgba(0, 0, 0, 0.8); border: 1px solid var(--ui-color); color: var(--ui-color); padding: 5px; font-family: inherit; font-size: 0.85rem; box-sizing: border-box; margin-bottom: 5px;" />
+        <button id="loadCloudFolderBtn" style="width: 100%; background: rgba(0, 0, 0, 0.8); border: 1px solid var(--ui-color); color: var(--ui-color); padding: 5px 10px; font-family: inherit; font-size: 0.85rem; cursor: pointer;">
+          📥 Load Folder
+        </button>
       </div>
       <div id="cloudFolderStatus" style="font-size: 0.75rem; color: var(--ui-color); opacity: 0.7; margin-bottom: 5px; text-align: center;"></div>
       <div id="cloudFolderContent" style="flex: 1; overflow-y: auto; font-size: 0.8rem;"></div>
