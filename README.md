@@ -1,5 +1,8 @@
 # Retro Drawing Analyzer
 
+[![CI](https://github.com/YOUR_USERNAME/retro-sketch/workflows/CI/badge.svg)](https://github.com/YOUR_USERNAME/retro-sketch/actions)
+[![Security Scan](https://github.com/YOUR_USERNAME/retro-sketch/workflows/Security%20Scan/badge.svg)](https://github.com/YOUR_USERNAME/retro-sketch/actions)
+
 Aplikacja do analizy PDF-ów z rysunkami technicznymi z OCR, tłumaczeniem i eksportem.
 
 ## 🚀 Szybki Start
@@ -122,4 +125,15 @@ Logi zapisywane w `backend/logs/`:
 Po uruchomieniu backendu:
 - Swagger UI: http://localhost:3000/docs
 - Health check: http://localhost:3000/api/health
+
+## 🔄 CI/CD
+
+Projekt używa GitHub Actions dla:
+- ✅ **CI**: Automatyczne testy i build przy każdym push/PR
+- 🐳 **Docker**: Build i push obrazów do GitHub Container Registry
+- 🚂 **Deploy**: Automatyczny deploy na Railway (opcjonalnie)
+- 🔒 **Security**: Skanowanie podatności w zależnościach
+- 🤖 **Dependabot**: Automatyczne aktualizacje zależności
+
+Zobacz [.github/workflows/README.md](.github/workflows/README.md) dla szczegółów.
 

@@ -44,3 +44,13 @@ Dockerfile
 .dockerignore
 docker-compose.yml
 
+# Don't copy other directories from root
+../node_modules/
+../src/
+../public/
+../index.html
+../package.json
+../package-lock.json
+../railway.toml
+../docker-compose.yml
+

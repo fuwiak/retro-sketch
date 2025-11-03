@@ -67,3 +67,6 @@ htmlcov/
 
 # Railway
 .railway/
+
+# GitHub Actions artifacts
+.github/workflows/*.log

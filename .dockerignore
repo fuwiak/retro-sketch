@@ -1,0 +1,25 @@
+# Ignore files when building from root context
+node_modules/
+src/
+public/
+index.html
+package.json
+package-lock.json
+railway.toml
+docker-compose.yml
+.git/
+.github/
+README.md
+DEPLOY.md
+.env
+.env.local
+*.log
+logs/
+output/
+uploads/
+dist/
+build/
+.vscode/
+.idea/
+.DS_Store
+
