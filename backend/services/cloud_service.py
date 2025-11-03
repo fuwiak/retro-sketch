@@ -352,11 +352,6 @@ class CloudService:
                                                 'url': download_url,
                                                 'download_url': download_url
                                             })
-                                            
-                                            # Stop if we've reached max_files limit
-                                            if max_files and len(files) >= max_files:
-                                                api_logger.debug(f"Reached max_files limit ({max_files}) in subfolder {folder_name}")
-                                                return files
                                 break
                             except:
                                 pass
