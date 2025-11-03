@@ -19,6 +19,35 @@ COPY backend/requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install Node.js for frontend build (before copying backend to avoid cache invalidation)
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y nodejs && \
+    node --version && npm --version
+
+# Copy frontend files for build
+COPY package*.json ./
+COPY vite.config.js ./
+COPY src/ ./src/
+COPY index.html ./
+COPY public/ ./public/ 2>/dev/null || true
+
+# Build frontend
+RUN if [ -f "package.json" ]; then \
+        echo "Building frontend..." && \
+        npm install && \
+        export VITE_API_BASE_URL=/api && \
+        npm run build && \
+        echo "Frontend build completed" && \
+        ls -la dist/ && \
+        mkdir -p backend/static && \
+        cp -r dist/* backend/static/ && \
+        echo "Frontend copied to backend/static" && \
+        ls -la backend/static/ && \
+        rm -rf node_modules src index.html vite.config.js public package*.json dist; \
+    else \
+        echo "No package.json found, skipping frontend build"; \
+    fi
+
 # Copy application code
 COPY backend/ .
 

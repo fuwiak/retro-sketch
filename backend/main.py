@@ -6,10 +6,13 @@ Handles OCR, translation, and document export
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Optional, List
 import os
 import time
+from pathlib import Path
 from dotenv import load_dotenv
 
 from services.ocr_service import OCRService
@@ -21,8 +24,8 @@ from services.logger import api_logger, log_api_request, log_api_response
 load_dotenv()
 
 app = FastAPI(
-    title="Retro Drawing Analyzer API",
-    description="Backend API for PDF drawing analysis with OCR, translation, and export",
+    title="Retro Drawing Analyzer",
+    description="PDF drawing analysis with OCR, translation, and export",
     version="1.0.0"
 )
 
@@ -40,16 +43,21 @@ ocr_service = OCRService()
 translation_service = TranslationService()
 export_service = ExportService()
 
+# Frontend static files configuration
+# Check if frontend dist directory exists (for Railway deployment)
+FRONTEND_DIR = Path(__file__).parent / "static"
+if not FRONTEND_DIR.exists():
+    # Try alternative path (if build is in root dist)
+    FRONTEND_DIR = Path(__file__).parent.parent / "dist"
 
-@app.get("/")
-async def root():
-    """Health check endpoint"""
-    return {
-        "status": "ok",
-        "message": "Retro Drawing Analyzer API is running",
-        "version": "1.0.0"
-    }
-
+# Mount static assets if frontend exists
+if FRONTEND_DIR.exists():
+    assets_dir = FRONTEND_DIR / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+    api_logger.info(f"Frontend found at {FRONTEND_DIR}")
+else:
+    api_logger.warning("Frontend not found - serving API only")
 
 @app.get("/api/health")
 async def health():
@@ -265,6 +273,44 @@ async def export_pdf(
             status_code=500,
             detail=f"PDF export failed: {str(e)}"
         )
+
+
+# ========== FRONTEND SERVING (must be last) ==========
+# Serve frontend for all non-API routes (SPA routing)
+# This must be defined after all API routes
+if FRONTEND_DIR.exists():
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str, request: Request):
+        # Don't interfere with API routes and docs
+        if (full_path.startswith("api/") or 
+            full_path.startswith("docs") or 
+            full_path.startswith("openapi.json") or
+            full_path.startswith("assets/")):
+            raise HTTPException(status_code=404, detail="Not found")
+        
+        # Serve index.html for all frontend routes
+        index_path = FRONTEND_DIR / "index.html"
+        if index_path.exists():
+            with open(index_path, "r", encoding="utf-8") as f:
+                html_content = f.read()
+            
+            # Auto-detect API URL from request
+            base_url = str(request.base_url).rstrip("/")
+            api_url = f"{base_url}/api"
+            
+            # Inject API URL into HTML as window variable
+            script_tag = f'<script>window.API_BASE_URL = "{api_url}";</script>'
+            # Inject before closing head tag, or at the beginning if no head tag
+            if '</head>' in html_content:
+                html_content = html_content.replace('</head>', f'{script_tag}</head>')
+            elif '<body>' in html_content:
+                html_content = html_content.replace('<body>', f'{script_tag}<body>')
+            else:
+                html_content = script_tag + html_content
+            
+            return HTMLResponse(content=html_content)
+        
+        raise HTTPException(status_code=404, detail="Frontend not found")
 
 
 if __name__ == "__main__":

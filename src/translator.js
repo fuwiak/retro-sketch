@@ -77,7 +77,7 @@ export async function translateToEnglish(text, useGlossary = true) {
       console.warn('Groq translation failed, trying API fallback:', groqError);
       
       // Fallback to API
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+      const { API_BASE_URL } = await import('./config.js');
       try {
         const response = await fetch(`${API_BASE_URL}/translate`, {
           method: 'POST',
