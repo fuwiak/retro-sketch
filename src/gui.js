@@ -1457,6 +1457,198 @@ els.modalSearch.addEventListener("input", (e) => {
   }
 });
 
+// ========== CLOUD FOLDER DRAWER ==========
+els.cloudFolderToggle.addEventListener("click", () => {
+  els.cloudFolderDrawer.classList.toggle("open");
+  playClick(400);
+});
+
+// Load cloud folder structure
+async function loadCloudFolder(url) {
+  if (!url) {
+    els.cloudFolderStatus.textContent = '⚠️ Enter URL';
+    return;
+  }
+  
+  els.cloudFolderStatus.textContent = '⏳ Loading folder...';
+  els.cloudFolderContent.innerHTML = '';
+  
+  try {
+    // Use backend proxy to fetch folder structure (CORS issue)
+    const response = await fetch(`${getApiBaseUrl()}/api/cloud/folder`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    
+    const data = await response.json();
+    renderCloudFolder(data);
+    els.cloudFolderStatus.textContent = `✓ Loaded ${data.files?.length || 0} files`;
+  } catch (error) {
+    console.error('Error loading cloud folder:', error);
+    els.cloudFolderStatus.textContent = `❌ Error: ${error.message}`;
+    els.cloudFolderContent.innerHTML = `<div style="color: rgb(255, 100, 100); padding: 10px;">Failed to load folder. Error: ${error.message}</div>`;
+  }
+}
+
+function renderCloudFolder(data) {
+  if (!data || !data.files || data.files.length === 0) {
+    els.cloudFolderContent.innerHTML = '<div style="padding: 10px; opacity: 0.7;">No files found</div>';
+    return;
+  }
+  
+  let html = '';
+  
+  // Group files by folder
+  const folders = {};
+  const rootFiles = [];
+  
+  data.files.forEach(file => {
+    const pathParts = file.path ? file.path.split('/').filter(p => p) : [];
+    if (pathParts.length > 1) {
+      const folderName = pathParts[0];
+      if (!folders[folderName]) {
+        folders[folderName] = [];
+      }
+      folders[folderName].push({ ...file, name: pathParts[pathParts.length - 1] });
+    } else {
+      rootFiles.push(file);
+    }
+  });
+  
+  // Render folders
+  Object.keys(folders).sort().forEach(folderName => {
+    html += `<div class="cloud-folder-item" style="font-weight: bold;">📁 ${folderName}</div>`;
+    folders[folderName].forEach(file => {
+      const icon = file.name.match(/\.(pdf|png|jpg|jpeg)$/i) ? 
+        (file.name.match(/\.pdf$/i) ? '📄' : '🖼️') : '📄';
+      html += `<div class="cloud-file-item" data-url="${file.url || file.download_url}" data-name="${file.name}">
+        ${icon} ${file.name}
+      </div>`;
+    });
+  });
+  
+  // Render root files
+  rootFiles.forEach(file => {
+    const icon = file.name.match(/\.(pdf|png|jpg|jpeg)$/i) ? 
+      (file.name.match(/\.pdf$/i) ? '📄' : '🖼️') : '📄';
+    html += `<div class="cloud-file-item" data-url="${file.url || file.download_url}" data-name="${file.name}">
+      ${icon} ${file.name}
+    </div>`;
+  });
+  
+  els.cloudFolderContent.innerHTML = html;
+  
+  // Add click handlers
+  els.cloudFolderContent.querySelectorAll('.cloud-file-item').forEach(item => {
+    item.addEventListener('click', async () => {
+      const fileUrl = item.dataset.url;
+      const fileName = item.dataset.name;
+      await loadFileFromCloud(fileUrl, fileName);
+      playClick(400);
+    });
+  });
+}
+
+async function loadFileFromCloud(url, fileName) {
+  try {
+    els.cloudFolderStatus.textContent = `⏳ Loading ${fileName}...`;
+    
+    // Fetch file through backend proxy
+    const response = await fetch(`${getApiBaseUrl()}/api/cloud/file`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url, fileName })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    
+    const blob = await response.blob();
+    
+    // Handle PDF files
+    if (fileName.match(/\.pdf$/i)) {
+      const file = new File([blob], fileName, { type: 'application/pdf' });
+      await handlePdfFile(file);
+      els.cloudFolderStatus.textContent = `✓ Loaded ${fileName}`;
+      log(`✓ Loaded PDF from cloud: ${fileName}`);
+    } 
+    // Handle image files (convert to PDF-like canvas)
+    else if (fileName.match(/\.(png|jpg|jpeg)$/i)) {
+      const img = new Image();
+      const imgUrl = URL.createObjectURL(blob);
+      img.onload = () => {
+        // Create a canvas and draw the image
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        
+        // Render directly on PDF canvas
+        renderImageOnCanvas(canvas);
+        els.cloudFolderStatus.textContent = `✓ Loaded ${fileName}`;
+        log(`✓ Loaded image from cloud: ${fileName}`);
+        URL.revokeObjectURL(imgUrl);
+      };
+      img.onerror = () => {
+        els.cloudFolderStatus.textContent = `❌ Error loading ${fileName}`;
+        URL.revokeObjectURL(imgUrl);
+      };
+      img.src = imgUrl;
+    }
+    
+    playTeleportFX();
+  } catch (error) {
+    console.error('Error loading file from cloud:', error);
+    els.cloudFolderStatus.textContent = `❌ Error loading ${fileName}`;
+    log(`❌ Error loading file: ${error.message}`);
+  }
+}
+
+async function handlePdfFile(file) {
+  currentPdfFile = file;
+  await pdfProcessor.renderPdfPreview(file, els.pdfCanvas);
+  els.pdfPreviewPlaceholder.style.display = 'none';
+  els.pdfPreview.classList.remove('hidden');
+  els.togglePdf.textContent = '📄 Hide Preview';
+  log(`✓ PDF loaded: ${file.name}`);
+  playTeleportFX();
+}
+
+function renderImageOnCanvas(sourceCanvas) {
+  els.pdfCanvas.width = sourceCanvas.width;
+  els.pdfCanvas.height = sourceCanvas.height;
+  const ctx = els.pdfCanvas.getContext('2d');
+  ctx.drawImage(sourceCanvas, 0, 0);
+  els.pdfPreviewPlaceholder.style.display = 'none';
+  els.pdfPreview.classList.remove('hidden');
+  els.togglePdf.textContent = '📄 Hide Preview';
+}
+
+els.loadCloudFolderBtn.addEventListener("click", async () => {
+  const url = els.cloudFolderUrl.value.trim();
+  await loadCloudFolder(url);
+  playClick(400);
+});
+
+// Auto-load on Enter
+els.cloudFolderUrl.addEventListener("keypress", async (e) => {
+  if (e.key === 'Enter') {
+    const url = els.cloudFolderUrl.value.trim();
+    await loadCloudFolder(url);
+  }
+});
+
 // ========== PROGRESS DRAWER ==========
 els.progressToggle.addEventListener("click", () => {
   els.progressDrawer.classList.toggle("open");
