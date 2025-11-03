@@ -24,11 +24,13 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
     apt-get install -y nodejs && \
     node --version && npm --version
 
-# Copy frontend files for build
+# Copy only essential frontend files for build
+# Note: .dockerignore excludes node_modules, dist, logs, etc.
 COPY package*.json ./
 COPY vite.config.js ./
 COPY src/ ./src/
 COPY index.html ./
+# public/ is optional - Vite will work without it
 
 # Copy public directory if it exists (optional for Vite)
 # Use a shell workaround to conditionally copy
