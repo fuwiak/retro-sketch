@@ -15,19 +15,18 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-package-lock.json
-package.json
-vite.config.js
+# Note: package.json, package-lock.json, vite.config.js, src/, index.html are NEEDED for build
+# Only package-lock.json is excluded (npm will regenerate it)
 
 # Build outputs
 dist/
 build/
 .output/
 
-# Frontend source (only needed for build, not for runtime)
-src/
-index.html
-public/
+# Frontend source - keep these for build:
+# src/, index.html, package.json, vite.config.js are needed
+# Only exclude public/ if it's not needed (Vite works without it)
+# public/
 
 # Backend
 backend/__pycache__/
