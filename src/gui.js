@@ -1522,7 +1522,12 @@ async function loadCloudFolder(url) {
     if (error.name === 'AbortError') {
       errorMessage = 'Request timeout - folder is too large or server is slow. This may take a while...';
     } else if (error.message === 'Failed to fetch') {
-      errorMessage = 'Cannot connect to server. Check if backend is running and accessible.';
+      // Check for Mixed Content error
+      if (window.location.protocol === 'https:' && endpointUrl.startsWith('http:')) {
+        errorMessage = 'Mixed Content Error: HTTPS page cannot access HTTP API. Please use HTTPS for API.';
+      } else {
+        errorMessage = 'Cannot connect to server. Check if backend is running and accessible.';
+      }
     }
     
     els.cloudFolderStatus.textContent = `❌ Error: ${errorMessage}`;
@@ -1530,7 +1535,7 @@ async function loadCloudFolder(url) {
       Failed to load folder.<br/>
       Error: ${errorMessage}<br/>
       <small>Check browser console (F12) for details</small><br/>
-      <small>API URL: ${endpointUrl}</small>
+      <small>API URL: ${endpointUrl || 'N/A'}</small>
     </div>`;
   }
 }

@@ -17,7 +17,9 @@ export function getApiBaseUrl() {
     const origin = window.location.origin;
     // Don't use localhost in production
     if (origin && !origin.includes('localhost') && !origin.includes('127.0.0.1')) {
-      return `${origin}/api`;
+      // Ensure HTTPS in production (fix Mixed Content error)
+      const httpsOrigin = origin.replace(/^http:/, 'https:');
+      return `${httpsOrigin}/api`;
     }
   }
   
