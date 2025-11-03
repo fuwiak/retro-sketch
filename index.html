@@ -253,8 +253,9 @@
       /* CLOUD FOLDER DRAWER */
       #cloudFolderToggle {
         position: fixed;
-        top: 5px;
+        top: 50%;
         left: 10px;
+        transform: translateY(-50%);
         border: 1px solid var(--ui-color);
         color: var(--ui-color);
         background: rgba(0, 0, 0, 0.6);
@@ -264,29 +265,32 @@
         text-shadow: 0 0 4px var(--ui-color);
         z-index: 120;
         transition: all 0.3s ease;
+        writing-mode: vertical-rl;
+        text-orientation: mixed;
       }
       #cloudFolderToggle:hover {
         background: var(--ui-color);
         color: #000;
-        transform: scale(1.05);
+        transform: translateY(-50%) scale(1.05);
       }
       #cloudFolderDrawer {
         position: fixed;
-        left: 10px;
-        top: -600px;
-        width: 400px;
-        height: 600px;
+        left: -450px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 450px;
+        height: 500px;
         background: rgba(0, 0, 0, 0.95);
         border: 1px solid var(--ui-color);
         box-shadow: 0 0 12px var(--ui-color);
         padding: 0.5rem;
-        transition: top 0.4s ease;
+        transition: left 0.4s ease;
         z-index: 115;
         display: flex;
         flex-direction: column;
       }
       #cloudFolderDrawer.open {
-        top: 40px;
+        left: 10px;
       }
       #cloudFolderDrawer h2 {
         font-size: 0.9rem;
