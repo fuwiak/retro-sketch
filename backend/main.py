@@ -246,6 +246,8 @@ async def export_xlsx(data: ExportData):
 # ========== CLOUD FOLDER API ==========
 class CloudFolderRequest(BaseModel):
     url: str
+    limit: int = 50  # Default: load 50 files at a time
+    offset: int = 0  # Pagination offset
 
 class CloudFileRequest(BaseModel):
     url: str
@@ -253,8 +255,8 @@ class CloudFileRequest(BaseModel):
 
 @app.post("/api/cloud/folder")
 async def get_cloud_folder(request: CloudFolderRequest):
-    """Get folder structure from Mail.ru Cloud"""
-    log_api_request("POST", "/api/cloud/folder", {"url": request.url})
+    """Get folder structure from Mail.ru Cloud with pagination"""
+    log_api_request("POST", "/api/cloud/folder", {"url": request.url, "limit": request.limit, "offset": request.offset})
     
     try:
         import asyncio
@@ -264,22 +266,54 @@ async def get_cloud_folder(request: CloudFolderRequest):
         # Use ThreadPoolExecutor for CPU-bound or blocking I/O operations
         loop = asyncio.get_event_loop()
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            # Parse with pagination - limit how many files we process
+            # We need to parse at least offset + limit files to know if there are more
+            # But we can stop early if we've found enough
+            max_files_to_parse = request.offset + request.limit + 1  # +1 to check if there are more
             folder_data = await asyncio.wait_for(
                 loop.run_in_executor(
-                    executor, cloud_service.parse_mailru_folder, request.url
+                    executor, 
+                    cloud_service.parse_mailru_folder, 
+                    request.url,
+                    max_files_to_parse  # Stop parsing after this many files
                 ),
-                timeout=45.0  # 45 seconds max
+                timeout=30.0  # Reduced timeout since we're processing fewer files
             )
-        files_count = len(folder_data.get('files', []))
-        log_api_response("POST", "/api/cloud/folder", 200, {"files_count": files_count})
-        api_logger.info(f"Successfully parsed folder: {files_count} files found")
-        return folder_data
+        
+        files = folder_data.get('files', [])
+        total_files = len(files)
+        
+        # Apply pagination - return only the requested slice
+        paginated_files = files[request.offset:request.offset + request.limit]
+        # If we parsed max_files_to_parse files, there might be more
+        # If we parsed fewer, we've reached the end
+        has_more = total_files >= max_files_to_parse
+        
+        result = {
+            'files': paginated_files,
+            'folder_url': folder_data.get('folder_url', request.url),
+            'pagination': {
+                'total': total_files,
+                'limit': request.limit,
+                'offset': request.offset,
+                'has_more': has_more,
+                'returned': len(paginated_files)
+            }
+        }
+        
+        log_api_response("POST", "/api/cloud/folder", 200, {
+            "returned": len(paginated_files),
+            "total": total_files,
+            "has_more": has_more
+        })
+        api_logger.info(f"Successfully parsed folder: {len(paginated_files)}/{total_files} files returned (offset={request.offset})")
+        return result
     except asyncio.TimeoutError:
         api_logger.error(f"Timeout parsing Mail.ru Cloud folder: {request.url}")
         log_api_response("POST", "/api/cloud/folder", 504, {"error": "Request timeout"})
         raise HTTPException(
             status_code=504,
-            detail="Request timeout - folder is too large or server is slow. Please try again or use a smaller folder."
+            detail="Request timeout - folder is too large or server is slow. Try reducing the limit parameter."
         )
     except Exception as e:
         api_logger.error(f"Error getting cloud folder: {str(e)}")

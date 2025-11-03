@@ -1460,18 +1460,42 @@ els.modalSearch.addEventListener("input", (e) => {
 // ========== CLOUD FOLDER DRAWER ==========
 els.cloudFolderToggle.addEventListener("click", () => {
   els.cloudFolderDrawer.classList.toggle("open");
-    playClick(400);
-  });
+  playClick(400);
+});
 
-// Load cloud folder structure
-async function loadCloudFolder(url) {
+// Pagination state for cloud folder
+let cloudFolderPagination = {
+  url: '',
+  offset: 0,
+  limit: 50,
+  hasMore: false,
+  total: 0,
+  loadedFiles: []
+};
+
+// Load cloud folder structure (with pagination)
+async function loadCloudFolder(url, append = false) {
   if (!url) {
     els.cloudFolderStatus.textContent = '⚠️ Enter URL';
     return;
   }
   
-  els.cloudFolderStatus.textContent = '⏳ Loading folder...';
-  els.cloudFolderContent.innerHTML = '';
+  // Reset pagination if loading new folder
+  if (!append || cloudFolderPagination.url !== url) {
+    cloudFolderPagination = {
+      url: url,
+      offset: 0,
+      limit: 50,
+      hasMore: false,
+      total: 0,
+      loadedFiles: []
+    };
+    els.cloudFolderContent.innerHTML = '';
+  }
+  
+  els.cloudFolderStatus.textContent = append 
+    ? `⏳ Loading more files... (${cloudFolderPagination.offset} loaded)`
+    : '⏳ Loading folder...';
   
   // Declare endpointUrl outside try block for error handling
   let endpointUrl = '';
@@ -1490,18 +1514,22 @@ async function loadCloudFolder(url) {
     console.log('Fetching from:', endpointUrl);
     console.log('API Base URL:', apiUrl);
     console.log('Request URL:', url);
-    console.log('Window API_BASE_URL:', window.API_BASE_URL);
+    console.log('Pagination:', { offset: cloudFolderPagination.offset, limit: cloudFolderPagination.limit });
     
     // Add timeout and error handling
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes timeout
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 1 minute timeout (reduced for pagination)
     
     const response = await fetch(endpointUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ 
+        url,
+        limit: cloudFolderPagination.limit,
+        offset: cloudFolderPagination.offset
+      }),
       signal: controller.signal
     });
     
@@ -1518,8 +1546,26 @@ async function loadCloudFolder(url) {
     
     const data = await response.json();
     console.log('Response data:', data);
-    renderCloudFolder(data);
-    els.cloudFolderStatus.textContent = `✓ Loaded ${data.files?.length || 0} files`;
+    
+    // Update pagination state
+    cloudFolderPagination.offset = data.pagination?.offset || cloudFolderPagination.offset;
+    cloudFolderPagination.hasMore = data.pagination?.has_more || false;
+    cloudFolderPagination.total = data.pagination?.total || 0;
+    
+    // Add new files to loaded files
+    if (data.files && data.files.length > 0) {
+      cloudFolderPagination.loadedFiles.push(...data.files);
+    }
+    
+    // Render all loaded files
+    renderCloudFolder({
+      files: cloudFolderPagination.loadedFiles,
+      pagination: data.pagination
+    });
+    
+    const loadedCount = cloudFolderPagination.loadedFiles.length;
+    const totalCount = cloudFolderPagination.total || loadedCount;
+    els.cloudFolderStatus.textContent = `✓ Loaded ${loadedCount}${totalCount > loadedCount ? `/${totalCount}` : ''} files${cloudFolderPagination.hasMore ? ' (more available)' : ''}`;
   } catch (error) {
     console.error('Error loading cloud folder:', error);
     console.error('Error details:', {
@@ -1541,14 +1587,26 @@ async function loadCloudFolder(url) {
     }
     
     els.cloudFolderStatus.textContent = `❌ Error: ${errorMessage}`;
-    els.cloudFolderContent.innerHTML = `<div style="color: rgb(255, 100, 100); padding: 10px;">
-      Failed to load folder.<br/>
-      Error: ${errorMessage}<br/>
-      <small>Check browser console (F12) for details</small><br/>
-      <small>API URL: ${endpointUrl || 'N/A'}</small><br/>
-      <small>Window API_BASE_URL: ${window.API_BASE_URL || 'N/A'}</small>
-    </div>`;
+    if (!append) {
+      els.cloudFolderContent.innerHTML = `<div style="color: rgb(255, 100, 100); padding: 10px;">
+        Failed to load folder.<br/>
+        Error: ${errorMessage}<br/>
+        <small>Check browser console (F12) for details</small><br/>
+        <small>API URL: ${endpointUrl || 'N/A'}</small><br/>
+        <small>Window API_BASE_URL: ${window.API_BASE_URL || 'N/A'}</small>
+      </div>`;
+    }
   }
+}
+
+// Load more files (pagination)
+async function loadMoreCloudFiles() {
+  if (!cloudFolderPagination.hasMore || !cloudFolderPagination.url) {
+    return;
+  }
+  
+  cloudFolderPagination.offset += cloudFolderPagination.limit;
+  await loadCloudFolder(cloudFolderPagination.url, true);
 }
 
 function renderCloudFolder(data) {
@@ -1597,17 +1655,48 @@ function renderCloudFolder(data) {
     </div>`;
   });
   
+  // Add "Load More" button if there are more files
+  if (data.pagination && data.pagination.has_more) {
+    html += `<div style="margin-top: 15px; text-align: center;">
+      <button id="loadMoreCloudFiles" style="
+        background: var(--ui-color);
+        color: var(--bg-color);
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: bold;
+      ">📥 Load More Files (${data.pagination.total - cloudFolderPagination.loadedFiles.length} remaining)</button>
+    </div>`;
+  }
+  
   els.cloudFolderContent.innerHTML = html;
   
-  // Add click handlers
+  // Add click handlers for files
   els.cloudFolderContent.querySelectorAll('.cloud-file-item').forEach(item => {
-    item.addEventListener('click', async () => {
-      const fileUrl = item.dataset.url;
-      const fileName = item.dataset.name;
+    // Remove existing listeners by cloning
+    const newItem = item.cloneNode(true);
+    item.parentNode.replaceChild(newItem, item);
+    
+    newItem.addEventListener('click', async () => {
+      const fileUrl = newItem.dataset.url;
+      const fileName = newItem.dataset.name;
       await loadFileFromCloud(fileUrl, fileName);
       playClick(400);
     });
   });
+  
+  // Add click handler for "Load More" button
+  const loadMoreBtn = els.cloudFolderContent.querySelector('#loadMoreCloudFiles');
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener('click', async () => {
+      loadMoreBtn.disabled = true;
+      loadMoreBtn.textContent = '⏳ Loading...';
+      await loadMoreCloudFiles();
+      playClick(400);
+    });
+  }
 }
 
 async function loadFileFromCloud(url, fileName) {

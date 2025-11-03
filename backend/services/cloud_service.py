@@ -19,13 +19,14 @@ class CloudService:
             'Upgrade-Insecure-Requests': '1'
         })
     
-    def parse_mailru_folder(self, url: str) -> Dict:
+    def parse_mailru_folder(self, url: str, max_files: int = None) -> Dict:
         """
         Parse Mail.ru Cloud public folder URL
         Returns list of files with their download URLs
+        max_files: Stop parsing after finding this many files (for pagination)
         """
         try:
-            api_logger.info(f"Fetching Mail.ru Cloud folder: {url}")
+            api_logger.info(f"Fetching Mail.ru Cloud folder: {url} (max_files={max_files})")
             
             # Extract folder hash from URL
             # Format: https://cloud.mail.ru/public/ZVeV/Mq5HoaFGX
@@ -120,10 +121,18 @@ class CloudService:
                                                     # Store folder info - frontend can use this to navigate
                                                     # For now, we'll try to fetch files from this folder
                                                     # Limit recursion to avoid too many requests
+                                                    # Stop if we've reached max_files limit
+                                                    if max_files and len(files) >= max_files:
+                                                        api_logger.debug(f"Reached max_files limit ({max_files}), stopping folder parsing")
+                                                        break
                                                     try:
-                                                        folder_files = self._fetch_folder_files(item_url, item_name)
+                                                        folder_files = self._fetch_folder_files(item_url, item_name, max_files - len(files) if max_files else None)
                                                         files.extend(folder_files)
                                                         api_logger.debug(f"Fetched {len(folder_files)} files from folder {item_name}")
+                                                        # Stop if we've reached max_files limit
+                                                        if max_files and len(files) >= max_files:
+                                                            api_logger.debug(f"Reached max_files limit ({max_files}), stopping after folder {item_name}")
+                                                            break
                                                     except Exception as e:
                                                         api_logger.warning(f"Error fetching folder {item_name}: {str(e)}")
                                                         # Continue with other folders even if one fails
@@ -240,7 +249,12 @@ class CloudService:
                         api_logger.debug(f"API endpoint {api_url} failed: {str(e)}")
                         continue
             
-            api_logger.info(f"Found {len(files)} files in folder")
+            # Truncate to max_files if specified
+            if max_files and len(files) > max_files:
+                files = files[:max_files]
+                api_logger.info(f"Found {len(files)} files in folder (truncated to max_files={max_files})")
+            else:
+                api_logger.info(f"Found {len(files)} files in folder")
             return {'files': files, 'folder_url': url}
             
         except Exception as e:
@@ -285,8 +299,10 @@ class CloudService:
                 })
         return files
     
-    def _fetch_folder_files(self, folder_url: str, folder_name: str) -> List[Dict]:
-        """Fetch files from a subfolder (recursive)"""
+    def _fetch_folder_files(self, folder_url: str, folder_name: str, max_files: int = None) -> List[Dict]:
+        """Fetch files from a subfolder (recursive)
+        max_files: Stop fetching after this many files (for pagination)
+        """
         files = []
         try:
             api_logger.debug(f"Fetching files from folder: {folder_url}")
@@ -338,6 +354,11 @@ class CloudService:
                                                 'url': download_url,
                                                 'download_url': download_url
                                             })
+                                            
+                                            # Stop if we've reached max_files limit
+                                            if max_files and len(files) >= max_files:
+                                                api_logger.debug(f"Reached max_files limit ({max_files}) in subfolder {folder_name}")
+                                                return files
                                 break
                             except:
                                 pass
