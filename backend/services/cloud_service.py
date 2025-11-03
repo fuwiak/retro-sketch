@@ -35,8 +35,8 @@ class CloudService:
             
             folder_hash = match.group(2)
             
-            # Try to fetch folder page
-            response = self.session.get(url, timeout=10)
+            # Try to fetch folder page with longer timeout for large folders
+            response = self.session.get(url, timeout=30)
             response.raise_for_status()
             
             # Parse HTML
@@ -220,7 +220,7 @@ class CloudService:
                 
                 for api_url in api_endpoints:
                     try:
-                        api_response = self.session.get(api_url, timeout=10)
+                        api_response = self.session.get(api_url, timeout=20)
                         if api_response.status_code == 200:
                             data = api_response.json()
                             # Try different response structures
@@ -290,7 +290,7 @@ class CloudService:
         files = []
         try:
             api_logger.debug(f"Fetching files from folder: {folder_url}")
-            response = self.session.get(folder_url, timeout=10)
+            response = self.session.get(folder_url, timeout=20)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.text, 'html.parser')

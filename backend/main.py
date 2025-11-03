@@ -257,18 +257,39 @@ async def get_cloud_folder(request: CloudFolderRequest):
     log_api_request("POST", "/api/cloud/folder", {"url": request.url})
     
     try:
-        # This may take a while for large folders (487 files)
-        folder_data = cloud_service.parse_mailru_folder(request.url)
+        import asyncio
+        import concurrent.futures
+        # Run in executor with timeout to prevent Railway timeout (max 60s)
+        # Use shorter timeout to give Railway time to respond
+        # Use ThreadPoolExecutor for CPU-bound or blocking I/O operations
+        loop = asyncio.get_event_loop()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            folder_data = await asyncio.wait_for(
+                loop.run_in_executor(
+                    executor, cloud_service.parse_mailru_folder, request.url
+                ),
+                timeout=45.0  # 45 seconds max
+            )
         files_count = len(folder_data.get('files', []))
         log_api_response("POST", "/api/cloud/folder", 200, {"files_count": files_count})
         api_logger.info(f"Successfully parsed folder: {files_count} files found")
         return folder_data
+    except asyncio.TimeoutError:
+        api_logger.error(f"Timeout parsing Mail.ru Cloud folder: {request.url}")
+        log_api_response("POST", "/api/cloud/folder", 504, {"error": "Request timeout"})
+        raise HTTPException(
+            status_code=504,
+            detail="Request timeout - folder is too large or server is slow. Please try again or use a smaller folder."
+        )
     except Exception as e:
         api_logger.error(f"Error getting cloud folder: {str(e)}")
         import traceback
         api_logger.error(f"Traceback: {traceback.format_exc()}")
         log_api_response("POST", "/api/cloud/folder", 500, {"error": str(e)})
-        raise HTTPException(status_code=500, detail=f"Failed to load folder: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load folder: {str(e)}"
+        )
 
 @app.post("/api/cloud/file")
 async def get_cloud_file(request: CloudFileRequest):
