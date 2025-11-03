@@ -442,12 +442,17 @@ els.enableCropBtn.addEventListener("click", () => {
   els.cropModeToggle.style.display = cropMode ? 'inline-block' : 'none';
   
   if (cropMode) {
+    // Ensure canvas is interactive
+    els.pdfCanvas.style.pointerEvents = 'auto';
+    els.pdfCanvas.style.cursor = cropModeType === 'polygon' ? 'crosshair' : 'crosshair';
+    
     // Initialize based on current mode type
     if (cropModeType === 'polygon') {
       // Initialize polygon mode
       polygonPoints = [];
       isPolygonComplete = false;
       els.cropOverlay.style.display = 'block';
+      els.cropOverlay.style.pointerEvents = 'none'; // Don't block clicks
       els.cropOverlay.classList.add('active');
       els.enableCropBtn.textContent = '✂️ Crop Mode ON';
       els.enableCropBtn.style.background = 'rgba(255, 0, 0, 0.3)';
@@ -466,6 +471,7 @@ els.enableCropBtn.addEventListener("click", () => {
     } else {
       // Initialize rectangle mode
       els.cropOverlay.style.display = 'block';
+      els.cropOverlay.style.pointerEvents = 'none'; // Don't block clicks
       els.cropOverlay.classList.add('active');
       els.enableCropBtn.textContent = '✂️ Crop Mode ON';
       els.enableCropBtn.style.background = 'rgba(255, 0, 0, 0.3)';

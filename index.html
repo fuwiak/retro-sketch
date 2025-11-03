@@ -584,10 +584,10 @@
       </div>
       <div id="pdfPreview" style="width: 100%; max-width: 800px; height: 600px; border: 1px solid var(--ui-color); box-shadow: 0 0 10px var(--ui-color); margin-top: 5px; position: relative; overflow: hidden; background: rgba(0,0,0,0.5);">
         <p id="pdfPreviewPlaceholder" style="opacity: 0.6; text-align: center; padding: 20px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">PDF preview will appear here</p>
-        <canvas id="pdfCanvas" style="display: block; max-width: 100%; max-height: 100%; cursor: crosshair;"></canvas>
+        <canvas id="pdfCanvas" style="display: block; max-width: 100%; max-height: 100%; cursor: crosshair; position: relative; z-index: 1; pointer-events: auto;"></canvas>
         <canvas id="polygonCanvas" style="position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1001;"></canvas>
         <canvas id="selectionCanvas" style="position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1002;"></canvas>
-        <div id="cropOverlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: none;">
+        <div id="cropOverlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: none; z-index: 999;">
           <div id="cropSelection" style="position: absolute; border: 2px dashed var(--ui-color); background: rgba(255, 0, 0, 0.1); box-shadow: 0 0 10px var(--ui-color); pointer-events: none; display: none;"></div>
         </div>
       </div>
