@@ -289,10 +289,15 @@ class CloudService:
             api_logger.error(f"Error parsing Mail.ru Cloud folder: {str(e)}")
             raise
     
-    def _parse_json_files(self, file_list: List, base_url: str) -> List[Dict]:
+    def _parse_json_files(self, file_list: List, base_url: str, max_files: int = None) -> List[Dict]:
         """Parse files from JSON structure"""
         files = []
         for item in file_list:
+            # Stop if we've reached max_files limit
+            if max_files and len(files) >= max_files:
+                api_logger.debug(f"Reached max_files limit ({max_files}) in _parse_json_files")
+                break
+                
             if isinstance(item, dict):
                 name = item.get('name', '')
                 path = item.get('path', '')
