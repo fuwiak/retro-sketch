@@ -294,16 +294,15 @@ async def get_cloud_folder(request: CloudFolderRequest):
             }
         }
         
-        log_api_response("POST", "/api/cloud/folder", 200, {
-            "returned": len(paginated_files),
-            "total": total_files,
-            "has_more": has_more
-        })
+        # Calculate time taken (simple - just log without timing for now)
+        log_api_response("POST", "/api/cloud/folder", 200, 0.0)
+        api_logger.info(f"Folder parsed: {len(paginated_files)}/{total_files} files returned (has_more={has_more})")
         api_logger.info(f"Successfully parsed folder: {len(paginated_files)}/{total_files} files returned (offset={request.offset})")
         return result
     except asyncio.TimeoutError:
         api_logger.error(f"Timeout parsing Mail.ru Cloud folder: {request.url}")
-        log_api_response("POST", "/api/cloud/folder", 504, {"error": "Request timeout"})
+        log_api_response("POST", "/api/cloud/folder", 504, 0.0)
+        api_logger.error("Request timeout")
         raise HTTPException(
             status_code=504,
             detail="Request timeout - folder is too large or server is slow. Try reducing the limit parameter."
@@ -312,7 +311,8 @@ async def get_cloud_folder(request: CloudFolderRequest):
         api_logger.error(f"Error getting cloud folder: {str(e)}")
         import traceback
         api_logger.error(f"Traceback: {traceback.format_exc()}")
-        log_api_response("POST", "/api/cloud/folder", 500, {"error": str(e)})
+        log_api_response("POST", "/api/cloud/folder", 500, 0.0)
+        api_logger.error(f"Error details: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to load folder: {str(e)}"
