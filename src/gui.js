@@ -417,10 +417,12 @@ els.cropModeToggle.addEventListener("click", () => {
       }
     });
     
-    els.cropStatus.textContent = 'Drag to select rectangle area';
+    els.cropStatus.textContent = '🖱️ Kliknij i przeciągnij na PDF, aby zaznaczyć prostokąt';
+    els.cropStatus.style.display = 'inline-block';
     log(`📐 Rectangle selection mode enabled`);
     } else {
-    els.cropStatus.textContent = cropModeType === 'polygon' ? 'Click to add points (double-click or Finish to complete)' : '';
+    els.cropStatus.textContent = cropModeType === 'polygon' ? '🖱️ Kliknij na PDF, aby dodać punkty (podwójne kliknięcie lub Finish kończy)' : '';
+    els.cropStatus.style.display = 'inline-block';
     log(`🔺 Polygon crop mode enabled`);
   }
   
@@ -449,7 +451,8 @@ els.enableCropBtn.addEventListener("click", () => {
       els.cropOverlay.classList.add('active');
       els.enableCropBtn.textContent = '✂️ Crop Mode ON';
       els.enableCropBtn.style.background = 'rgba(255, 0, 0, 0.3)';
-      els.cropStatus.textContent = 'Click to add points (double-click or Finish to complete)';
+      els.cropStatus.textContent = '🖱️ Kliknij na PDF, aby dodać punkty (podwójne kliknięcie lub Finish kończy)';
+      els.cropStatus.style.display = 'inline-block';
       els.polygonCanvas.width = els.pdfCanvas.width;
       els.polygonCanvas.height = els.pdfCanvas.height;
       els.polygonCanvas.style.width = els.pdfCanvas.style.width;
@@ -530,7 +533,8 @@ els.enableCropBtn.addEventListener("click", () => {
         }
       });
       
-      els.cropStatus.textContent = 'Drag to select rectangle area';
+      els.cropStatus.textContent = '🖱️ Kliknij i przeciągnij na PDF, aby zaznaczyć prostokąt';
+      els.cropStatus.style.display = 'inline-block';
       log("📐 Rectangle selection mode enabled - drag to select");
       }
     } else {
