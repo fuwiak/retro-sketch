@@ -41,11 +41,14 @@ COPY index.html ./
 RUN mkdir -p /tmp/public && \
     if [ -d "public" ]; then cp -r public/* /tmp/public/ 2>/dev/null || true; fi
 
+# Set environment variable for Vite build
+ENV VITE_API_BASE_URL=/api
+
 # Build frontend
 RUN if [ -f "package.json" ]; then \
         echo "Building frontend..." && \
+        echo "VITE_API_BASE_URL=$VITE_API_BASE_URL" && \
         npm install && \
-        export VITE_API_BASE_URL=/api && \
         npm run build && \
         echo "Frontend build completed" && \
         ls -la dist/ && \
