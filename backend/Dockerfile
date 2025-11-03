@@ -29,7 +29,11 @@ COPY package*.json ./
 COPY vite.config.js ./
 COPY src/ ./src/
 COPY index.html ./
-COPY public/ ./public/ 2>/dev/null || true
+
+# Copy public directory if it exists (optional for Vite)
+# Use a shell workaround to conditionally copy
+RUN mkdir -p /tmp/public && \
+    if [ -d "public" ]; then cp -r public/* /tmp/public/ 2>/dev/null || true; fi
 
 # Build frontend
 RUN if [ -f "package.json" ]; then \
@@ -43,7 +47,7 @@ RUN if [ -f "package.json" ]; then \
         cp -r dist/* backend/static/ && \
         echo "Frontend copied to backend/static" && \
         ls -la backend/static/ && \
-        rm -rf node_modules src index.html vite.config.js public package*.json dist; \
+        rm -rf node_modules src index.html vite.config.js package*.json dist; \
     else \
         echo "No package.json found, skipping frontend build"; \
     fi
