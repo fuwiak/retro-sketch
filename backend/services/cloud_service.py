@@ -102,13 +102,12 @@ class CloudService:
                                         array_str = script_content[array_start:array_end]
                                         list_data = json.loads(array_str)
                                         
-                                        # Parse items from list
+                                        # Parse items from list - SIMPLE: just get all files
                                         for item in list_data:
                                             if isinstance(item, dict):
                                                 item_type = item.get('type') or item.get('kind', '')
                                                 item_name = item.get('name', '')
                                                 item_weblink = item.get('weblink', '')
-                                                item_count = item.get('count', {})
                                                 
                                                 # Build URL
                                                 if item_weblink:
@@ -116,42 +115,24 @@ class CloudService:
                                                 else:
                                                     item_url = f"{url}/{item_name}"
                                                 
-                                                # If it's a folder, we can list it and potentially recurse later
+                                                # If it's a folder, fetch files from it
                                                 if item_type == 'folder':
-                                                    # Store folder info - frontend can use this to navigate
-                                                    # For now, we'll try to fetch files from this folder
-                                                    # Limit recursion to avoid too many requests
-                                                    # Stop if we've reached max_files limit
-                                                    if max_files and len(files) >= max_files:
-                                                        api_logger.debug(f"Reached max_files limit ({max_files}), stopping folder parsing")
-                                                        break
                                                     try:
-                                                        folder_files = self._fetch_folder_files(item_url, item_name, max_files - len(files) if max_files else None)
+                                                        folder_files = self._fetch_folder_files(item_url, item_name)
                                                         files.extend(folder_files)
                                                         api_logger.debug(f"Fetched {len(folder_files)} files from folder {item_name}")
-                                                        # Stop if we've reached max_files limit
-                                                        if max_files and len(files) >= max_files:
-                                                            api_logger.debug(f"Reached max_files limit ({max_files}), stopping after folder {item_name}")
-                                                            break
                                                     except Exception as e:
                                                         api_logger.warning(f"Error fetching folder {item_name}: {str(e)}")
                                                         # Continue with other folders even if one fails
-                                                # If it's a file
+                                                # If it's a file, add it
                                                 elif item_type == 'file' or (item_type != 'folder' and item_name):
-                                                    # Build download URL
                                                     download_url = item_url
-                                                    
                                                     files.append({
                                                         'name': item_name,
                                                         'path': '',
                                                         'url': download_url,
                                                         'download_url': download_url
                                                     })
-                                                    
-                                                    # Stop if we've reached max_files limit
-                                                    if max_files and len(files) >= max_files:
-                                                        api_logger.debug(f"Reached max_files limit ({max_files}), stopping file parsing")
-                                                        break
                             except Exception as e:
                                 api_logger.debug(f"Error parsing list array: {str(e)}")
                                 pass
