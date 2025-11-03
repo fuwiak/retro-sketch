@@ -22,8 +22,8 @@ COPY backend/requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Node.js for frontend build (before copying backend to avoid cache invalidation)
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+# Install Node.js 20 for frontend build (Vite 7 requires Node 20.19+ or 22.12+)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
     node --version && npm --version && \
     rm -rf /var/lib/apt/lists/*
