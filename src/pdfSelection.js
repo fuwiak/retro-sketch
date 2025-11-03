@@ -80,6 +80,7 @@ export class RectangleSelection {
   }
 
   onMouseDown(e) {
+    console.log('RectangleSelection onMouseDown:', { isSelecting: this.isSelecting, canvasWidth: this.canvas.width, canvasHeight: this.canvas.height });
     if (!this.isSelecting) {
       const rect = this.canvas.getBoundingClientRect();
       const scaleX = this.canvas.width / rect.width;
@@ -90,6 +91,7 @@ export class RectangleSelection {
       this.startY = (e.clientY - rect.top) * scaleY;
       this.currentX = this.startX;
       this.currentY = this.startY;
+      console.log('RectangleSelection: Selection started at', this.startX, this.startY);
     }
   }
 
