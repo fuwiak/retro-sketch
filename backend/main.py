@@ -325,7 +325,8 @@ async def get_cloud_file(request: CloudFileRequest):
     
     try:
         file_content = cloud_service.download_file(request.url)
-        log_api_response("POST", "/api/cloud/file", 200, {"file_size": len(file_content)})
+        log_api_response("POST", "/api/cloud/file", 200, 0.0)
+        api_logger.info(f"File downloaded: {request.fileName} ({len(file_content)} bytes)")
         return Response(
             content=file_content,
             media_type="application/octet-stream",
@@ -335,7 +336,8 @@ async def get_cloud_file(request: CloudFileRequest):
         )
     except Exception as e:
         api_logger.error(f"Error downloading cloud file: {str(e)}")
-        log_api_response("POST", "/api/cloud/file", 500, {"error": str(e)})
+        log_api_response("POST", "/api/cloud/file", 500, 0.0)
+        api_logger.error(f"Error details: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to download file: {str(e)}")
 
 @app.post("/api/export/pdf")
