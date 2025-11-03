@@ -52,10 +52,10 @@ RUN if [ -f "package.json" ]; then \
         npm run build && \
         echo "Frontend build completed" && \
         ls -la dist/ && \
-        mkdir -p backend/static && \
-        cp -r dist/* backend/static/ && \
-        echo "Frontend copied to backend/static" && \
-        ls -la backend/static/ && \
+        mkdir -p static && \
+        cp -r dist/* static/ && \
+        echo "Frontend copied to static/" && \
+        ls -la static/ && \
         rm -rf node_modules src index.html vite.config.js package*.json dist; \
     else \
         echo "No package.json found, skipping frontend build"; \
