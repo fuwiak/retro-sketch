@@ -1,0 +1,284 @@
+"""
+FastAPI Backend for Retro Drawing Analyzer
+Handles OCR, translation, and document export
+"""
+
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel
+from typing import Optional, List
+import os
+import time
+from dotenv import load_dotenv
+
+from services.ocr_service import OCRService
+from services.translation_service import TranslationService
+from services.export_service import ExportService
+from services.logger import api_logger, log_api_request, log_api_response
+
+# Load environment variables
+load_dotenv()
+
+app = FastAPI(
+    title="Retro Drawing Analyzer API",
+    description="Backend API for PDF drawing analysis with OCR, translation, and export",
+    version="1.0.0"
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify exact origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Initialize services
+ocr_service = OCRService()
+translation_service = TranslationService()
+export_service = ExportService()
+
+
+@app.get("/")
+async def root():
+    """Health check endpoint"""
+    return {
+        "status": "ok",
+        "message": "Retro Drawing Analyzer API is running",
+        "version": "1.0.0"
+    }
+
+
+@app.get("/api/health")
+async def health():
+    """Health check with service status"""
+    return {
+        "status": "ok",
+        "services": {
+            "ocr": ocr_service.is_available(),
+            "translation": translation_service.is_available(),
+            "export": export_service.is_available()
+        }
+    }
+
+
+# ========== OCR ENDPOINTS ==========
+
+@app.post("/api/ocr/process")
+async def process_ocr(
+    request: Request,
+    file: UploadFile = File(...),
+    languages: str = Form("rus+eng")
+):
+    """
+    Process PDF or image file with OCR using intelligent method selection.
+    AI agent evaluates file complexity and estimated processing time,
+    then selects optimal method (LLM Groq or Tesseract OCR).
+    Supports multiple languages (rus+eng, eng, rus, etc.)
+    """
+    start_time = time.time()
+    client_ip = request.client.host if request.client else None
+    
+    try:
+        # Log API request
+        log_api_request("POST", "/api/ocr/process", client_ip)
+        api_logger.info(f"OCR request received - File: {file.filename}, Languages: {languages}")
+        
+        # Parse languages
+        lang_list = languages.split("+") if "+" in languages else [languages]
+        
+        # Read file content
+        file_content = await file.read()
+        file_type = file.content_type
+        
+        api_logger.info(f"File read - Size: {len(file_content) / 1024:.1f}KB, Type: {file_type}")
+        
+        # Process with OCR (agent automatically selects best method)
+        result = await ocr_service.process_file(
+            file_content=file_content,
+            file_type=file_type,
+            languages=lang_list
+        )
+        
+        # Extract processing info
+        processing_info = result.get("processing_info", {})
+        
+        response_time = time.time() - start_time
+        log_api_response("POST", "/api/ocr/process", 200, response_time)
+        
+        api_logger.info(
+            f"OCR request completed - Method: {processing_info.get('method', 'unknown')}, "
+            f"Time: {response_time:.2f}s, Text length: {len(result.get('text', ''))} chars"
+        )
+        
+        return {
+            "success": True,
+            "text": result.get("text", ""),
+            "file_type": result.get("file_type", "unknown"),
+            "pages": result.get("pages", 1),
+            "metadata": result.get("metadata", {}),
+            "processing_info": {
+                "method_used": processing_info.get("method", "unknown"),
+                "estimated_time": processing_info.get("estimated_time", 0),
+                "actual_time": processing_info.get("actual_time", 0),
+                "reasoning": processing_info.get("reasoning", ""),
+                "file_stats": processing_info.get("file_stats", {})
+            }
+        }
+    
+    except Exception as e:
+        response_time = time.time() - start_time
+        log_api_response("POST", "/api/ocr/process", 500, response_time)
+        api_logger.error(f"OCR request failed - Error: {str(e)}", exc_info=True)
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"OCR processing failed: {str(e)}"
+        )
+
+
+# ========== TRANSLATION ENDPOINTS ==========
+
+class TranslationRequest(BaseModel):
+    text: str
+    from_lang: str = "ru"
+    to_lang: str = "en"
+
+
+@app.post("/api/translate")
+async def translate_text(request: TranslationRequest):
+    """
+    Translate text from one language to another
+    Uses technical glossary and Groq AI
+    """
+    try:
+        translated = await translation_service.translate(
+            text=request.text,
+            from_lang=request.from_lang,
+            to_lang=request.to_lang
+        )
+        
+        return {
+            "success": True,
+            "originalText": request.text,
+            "translatedText": translated,
+            "from": request.from_lang,
+            "to": request.to_lang
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Translation failed: {str(e)}"
+        )
+
+
+# ========== EXPORT ENDPOINTS ==========
+
+class ExportData(BaseModel):
+    extractedData: dict
+    translations: dict
+    steelEquivalents: dict = {}
+
+
+@app.post("/api/export/docx")
+async def export_docx(data: ExportData):
+    """
+    Export data to DOCX format
+    """
+    try:
+        file_path = await export_service.export_to_docx(
+            extracted_data=data.extractedData,
+            translations=data.translations,
+            steel_equivalents=data.steelEquivalents
+        )
+        
+        return FileResponse(
+            file_path,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename="drawing_analysis.docx"
+        )
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"DOCX export failed: {str(e)}"
+        )
+
+
+@app.post("/api/export/xlsx")
+async def export_xlsx(data: ExportData):
+    """
+    Export data to XLSX format
+    """
+    try:
+        file_path = await export_service.export_to_xlsx(
+            extracted_data=data.extractedData,
+            translations=data.translations,
+            steel_equivalents=data.steelEquivalents
+        )
+        
+        return FileResponse(
+            file_path,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            filename="drawing_analysis.xlsx"
+        )
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"XLSX export failed: {str(e)}"
+        )
+
+
+@app.post("/api/export/pdf")
+async def export_pdf(
+    pdf: UploadFile = File(...),
+    data: str = Form(...)
+):
+    """
+    Export PDF with English overlay
+    """
+    try:
+        import json
+        data_dict = json.loads(data)
+        
+        pdf_content = await pdf.read()
+        
+        file_path = await export_service.export_to_pdf(
+            pdf_content=pdf_content,
+            extracted_data=data_dict.get("extractedData", {}),
+            translations=data_dict.get("translations", {}),
+            steel_equivalents=data_dict.get("steelEquivalents", {})
+        )
+        
+        return FileResponse(
+            file_path,
+            media_type="application/pdf",
+            filename="drawing_analysis_with_overlay.pdf"
+        )
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"PDF export failed: {str(e)}"
+        )
+
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    # Get port from environment variable (Railway provides PORT)
+    port = int(os.getenv("PORT", 3000))
+    host = os.getenv("HOST", "0.0.0.0")
+    reload = os.getenv("ENVIRONMENT", "development") == "development"
+    
+    uvicorn.run(
+        "main:app",
+        host=host,
+        port=port,
+        reload=reload
+    )
+
