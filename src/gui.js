@@ -1479,26 +1479,59 @@ async function loadCloudFolder(url) {
     const apiUrl = getApiBaseUrl();
     const endpointUrl = `${apiUrl}/cloud/folder`;
     console.log('Fetching from:', endpointUrl);
+    console.log('API Base URL:', apiUrl);
+    console.log('Request URL:', url);
+    
+    // Add timeout and error handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes timeout
     
     const response = await fetch(endpointUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ url })
+      body: JSON.stringify({ url }),
+      signal: controller.signal
     });
     
+    clearTimeout(timeoutId);
+    
+    console.log('Response status:', response.status);
+    console.log('Response ok:', response.ok);
+    
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      const errorText = await response.text();
+      console.error('Response error:', errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 100)}`);
     }
     
     const data = await response.json();
+    console.log('Response data:', data);
     renderCloudFolder(data);
     els.cloudFolderStatus.textContent = `✓ Loaded ${data.files?.length || 0} files`;
   } catch (error) {
     console.error('Error loading cloud folder:', error);
-    els.cloudFolderStatus.textContent = `❌ Error: ${error.message}`;
-    els.cloudFolderContent.innerHTML = `<div style="color: rgb(255, 100, 100); padding: 10px;">Failed to load folder. Error: ${error.message}</div>`;
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
+    
+    let errorMessage = error.message;
+    if (error.name === 'AbortError') {
+      errorMessage = 'Request timeout - folder is too large or server is slow. This may take a while...';
+    } else if (error.message === 'Failed to fetch') {
+      errorMessage = 'Cannot connect to server. Check if backend is running and accessible.';
+    }
+    
+    els.cloudFolderStatus.textContent = `❌ Error: ${errorMessage}`;
+    els.cloudFolderContent.innerHTML = `<div style="color: rgb(255, 100, 100); padding: 10px;">
+      Failed to load folder.<br/>
+      Error: ${errorMessage}<br/>
+      <small>Check browser console (F12) for details</small><br/>
+      <small>API URL: ${endpointUrl}</small>
+    </div>`;
   }
 }
 

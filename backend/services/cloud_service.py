@@ -119,8 +119,14 @@ class CloudService:
                                                 if item_type == 'folder':
                                                     # Store folder info - frontend can use this to navigate
                                                     # For now, we'll try to fetch files from this folder
-                                                    folder_files = self._fetch_folder_files(item_url, item_name)
-                                                    files.extend(folder_files)
+                                                    # Limit recursion to avoid too many requests
+                                                    try:
+                                                        folder_files = self._fetch_folder_files(item_url, item_name)
+                                                        files.extend(folder_files)
+                                                        api_logger.debug(f"Fetched {len(folder_files)} files from folder {item_name}")
+                                                    except Exception as e:
+                                                        api_logger.warning(f"Error fetching folder {item_name}: {str(e)}")
+                                                        # Continue with other folders even if one fails
                                                 # If it's a file
                                                 elif item_type == 'file' or (item_type != 'folder' and item_name):
                                                     # Build download URL
