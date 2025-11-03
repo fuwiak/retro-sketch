@@ -4,12 +4,15 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies for Tesseract OCR
+# Install system dependencies for Tesseract OCR and Node.js
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     tesseract-ocr-rus \
     tesseract-ocr-eng \
     poppler-utils \
+    curl \
+    ca-certificates \
+    gnupg \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
@@ -22,7 +25,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install Node.js for frontend build (before copying backend to avoid cache invalidation)
 RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
     apt-get install -y nodejs && \
-    node --version && npm --version
+    node --version && npm --version && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy only essential frontend files for build
 # Note: .dockerignore excludes node_modules, dist, logs, etc.
