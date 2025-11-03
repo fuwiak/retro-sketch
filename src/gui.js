@@ -10,6 +10,7 @@ import * as steelEquivalents from "./steelEquivalents.js";
 import * as exporter from "./exporter.js";
 import * as telegramService from "./telegramService.js";
 import { RectangleSelection, initPdfSelection, extractTextFromSelection, extractSelectionAsImage, renderSelectionOverlay } from "./pdfSelection.js";
+import { getApiBaseUrl } from "./config.js";
 
 const els = {
   selectPdfBtn: document.getElementById("selectPdfBtn"),
