@@ -1475,7 +1475,12 @@ async function loadCloudFolder(url) {
   
   try {
     // Use backend proxy to fetch folder structure (CORS issue)
-    const response = await fetch(`${getApiBaseUrl()}/api/cloud/folder`, {
+    // Note: getApiBaseUrl() already includes /api, so we don't add it again
+    const apiUrl = getApiBaseUrl();
+    const endpointUrl = `${apiUrl}/cloud/folder`;
+    console.log('Fetching from:', endpointUrl);
+    
+    const response = await fetch(endpointUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1561,7 +1566,12 @@ async function loadFileFromCloud(url, fileName) {
     els.cloudFolderStatus.textContent = `⏳ Loading ${fileName}...`;
     
     // Fetch file through backend proxy
-    const response = await fetch(`${getApiBaseUrl()}/api/cloud/file`, {
+    // Note: getApiBaseUrl() already includes /api, so we don't add it again
+    const apiUrl = getApiBaseUrl();
+    const endpointUrl = `${apiUrl}/cloud/file`;
+    console.log('Fetching file from:', endpointUrl);
+    
+    const response = await fetch(endpointUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
