@@ -1835,8 +1835,8 @@ function renderCloudFolder(data) {
                       filesHtml += `<div class="${itemClass}" data-${item.type === 'folder' ? 'folder' : ''}url="${item.url || item.download_url}" data-${item.type === 'folder' ? 'folder' : ''}name="${item.name}" style="padding: 5px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,0,0,0.1)'" onmouseout="this.style.background='transparent'">
                         ${icon} ${item.name}
                       </div>`;
-                    });
-                  } else {
+  });
+} else {
                     filesHtml = '<div style="padding: 5px; opacity: 0.7;">No files</div>';
                   }
                   
@@ -1846,8 +1846,8 @@ function renderCloudFolder(data) {
                   filesContainer.querySelectorAll('.cloud-file-item').forEach(item => {
                     item.addEventListener('click', async () => {
                       await loadFileFromCloud(item.dataset.url, item.dataset.name);
-                      playClick(400);
-                    });
+      playClick(400);
+    });
                   });
                   
                   // Recursively attach folder listeners
@@ -1864,8 +1864,8 @@ function renderCloudFolder(data) {
                 expandIcon.style.transform = 'rotate(0deg)';
                 filesContainer.style.display = 'none';
               }
-              playClick(400);
-            });
+    playClick(400);
+  });
           };
           
           filesContainer.querySelectorAll('.cloud-folder-expandable').forEach(nestedFolder => {
@@ -1980,6 +1980,11 @@ async function handlePdfFile(file) {
   currentPdfFile = file;
   
   try {
+    // Validate file before rendering
+    if (!file || file.size === 0) {
+      throw new Error('PDF file is empty');
+    }
+    
     // Render PDF on canvas
     const preview = await pdfProcessor.renderPdfPreview(file, els.pdfCanvas);
     
@@ -1991,8 +1996,9 @@ async function handlePdfFile(file) {
     // If renderPdfPreview returned a URL (fallback), use iframe
     if (typeof preview === 'string' && !preview.startsWith('data:')) {
       // Object URL - use iframe with PDF.js viewer or direct PDF
-      els.pdfPreview.innerHTML = `<iframe src="${preview}" style="width: 100%; height: 100%; border: none;" onerror="this.parentElement.innerHTML='<p style=\\'opacity: 0.6; text-align: center; padding: 20px;\\'>Failed to load PDF. Please try downloading the file.</p>'"></iframe>`;
+      els.pdfPreview.innerHTML = `<iframe src="${preview}" style="width: 100%; height: 100%; border: none;" onerror="this.parentElement.innerHTML='<p style=\\'opacity: 0.6; text-align: center; padding: 20px;\\'>Failed to load PDF. File may be corrupted. Size: ${(file.size / 1024).toFixed(1)} KB</p>'"></iframe>`;
       els.pdfCanvas.style.display = 'none';
+      log(`✓ PDF loaded (iframe fallback): ${file.name}`);
     } else if (typeof preview === 'string' && preview.startsWith('data:')) {
       // Image data URL - show as image (canvas was rendered successfully)
       els.pdfPreview.innerHTML = '';
@@ -2008,6 +2014,7 @@ async function handlePdfFile(file) {
       els.pdfPreview.innerHTML = '';
       els.pdfPreview.appendChild(img);
       els.pdfCanvas.style.display = 'none';
+      log(`✓ PDF loaded (canvas rendered): ${file.name}`);
     } else {
       // Canvas was rendered directly, show it
       els.pdfPreview.innerHTML = '';
@@ -2016,15 +2023,19 @@ async function handlePdfFile(file) {
       if (!els.pdfCanvas.parentElement || els.pdfCanvas.parentElement !== els.pdfPreview) {
         els.pdfPreview.appendChild(els.pdfCanvas);
       }
+      log(`✓ PDF loaded (canvas direct): ${file.name}`);
     }
     
-    log(`✓ PDF loaded: ${file.name}`);
     playTeleportFX();
   } catch (error) {
     console.error('Error rendering PDF:', error);
-    els.pdfPreview.innerHTML = `<p style="opacity: 0.6; text-align: center; padding: 20px;">Error loading PDF: ${error.message}</p>`;
+    const errorMsg = error.message.includes('Invalid PDF') || error.message.includes('PDF structure') 
+      ? `Invalid or corrupted PDF file: ${error.message}` 
+      : `Error loading PDF: ${error.message}`;
+    els.pdfPreview.innerHTML = `<p style="opacity: 0.6; text-align: center; padding: 20px;">${errorMsg}<br/>File: ${file.name} (${(file.size / 1024).toFixed(1)} KB)</p>`;
     els.pdfPreview.classList.remove('hidden');
     els.pdfPreviewPlaceholder.style.display = 'none';
+    log(`❌ ${errorMsg}`);
   }
 }
 
