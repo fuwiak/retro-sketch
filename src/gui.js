@@ -1939,9 +1939,46 @@ async function loadFileFromCloud(url, fileName) {
       }
       
       const file = new File([blob], fileName, { type: 'application/pdf' });
-      await handlePdfFile(file);
-      els.cloudFolderStatus.textContent = `✓ Loaded ${fileName}`;
-      log(`✓ Loaded PDF from cloud: ${fileName} (${(blob.size / 1024).toFixed(1)} KB)`);
+      
+      // Use the same rendering approach as local file selection for consistency
+      currentPdfFile = file;
+      els.cloudFolderStatus.textContent = `⏳ Rendering ${fileName}...`;
+      
+      try {
+        const preview = await pdfProcessor.renderPdfPreview(file, els.pdfCanvas);
+        
+        // Show preview (same logic as local file selection)
+        if (typeof preview === 'string' && preview.startsWith('data:')) {
+          // Image data URL - canvas was rendered successfully
+          els.pdfPreview.innerHTML = `<img src="${preview}" style="max-width: 100%; height: auto;" />`;
+          els.pdfCanvas.style.display = 'none';
+        } else if (typeof preview === 'string') {
+          // Object URL - use iframe fallback
+          els.pdfPreview.innerHTML = `<iframe src="${preview}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+          els.pdfCanvas.style.display = 'none';
+        } else {
+          // Canvas was rendered directly, show it
+          els.pdfPreview.innerHTML = '';
+          els.pdfCanvas.style.display = 'block';
+          if (!els.pdfCanvas.parentElement || els.pdfCanvas.parentElement !== els.pdfPreview) {
+            els.pdfPreview.appendChild(els.pdfCanvas);
+          }
+        }
+        
+        els.pdfPreviewPlaceholder.style.display = 'none';
+        els.pdfPreview.classList.remove('hidden');
+        els.togglePdf.textContent = '📄 Hide Preview';
+        
+        els.cloudFolderStatus.textContent = `✓ Loaded ${fileName}`;
+        log(`✓ Loaded PDF from cloud: ${fileName} (${(blob.size / 1024).toFixed(1)} KB)`);
+        playTeleportFX();
+      } catch (error) {
+        console.error('Error rendering PDF from cloud:', error);
+        els.cloudFolderStatus.textContent = `❌ Error rendering ${fileName}`;
+        log(`❌ Error rendering PDF: ${error.message}`);
+        // Fallback to handlePdfFile for error handling
+        await handlePdfFile(file);
+      }
     } 
     // Handle image files (convert to PDF-like canvas)
     else if (fileName.match(/\.(png|jpg|jpeg)$/i)) {
