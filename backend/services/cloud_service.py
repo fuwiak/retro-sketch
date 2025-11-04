@@ -369,9 +369,91 @@ class CloudService:
         """Download file from URL"""
         try:
             api_logger.info(f"Downloading file: {url}")
-            response = self.session.get(url, timeout=30, stream=True)
+            response = self.session.get(url, timeout=30, stream=True, allow_redirects=True)
             response.raise_for_status()
-            return response.content
+            
+            # Check if response is actually a file or HTML error page
+            content_type = response.headers.get('Content-Type', '').lower()
+            content = response.content
+            
+            # Check first bytes to detect HTML
+            if len(content) > 4:
+                first_bytes = content[:4]
+                is_html = first_bytes[0:2] == b'<!' or first_bytes[0:2] == b'<h' or b'<html' in content[:100].lower()
+                
+                if is_html or 'text/html' in content_type:
+                    api_logger.warning(f"Received HTML instead of file. Content-Type: {content_type}, First bytes: {first_bytes}")
+                    api_logger.warning(f"HTML preview: {content[:500].decode('utf-8', errors='ignore')}")
+                    
+                    # Try to extract direct download link from HTML
+                    soup = BeautifulSoup(content, 'html.parser')
+                    
+                    # Look for download links or redirects
+                    download_links = []
+                    
+                    # Try to find direct download links
+                    for link in soup.find_all('a', href=True):
+                        href = link.get('href', '')
+                        if href and ('download' in href.lower() or href.endswith('.pdf') or href.endswith('.png') or href.endswith('.jpg')):
+                            if href.startswith('http'):
+                                download_links.append(href)
+                            elif href.startswith('/'):
+                                # Make absolute URL
+                                from urllib.parse import urljoin
+                                download_links.append(urljoin(url, href))
+                    
+                    # Try to find meta refresh or redirect
+                    meta_refresh = soup.find('meta', attrs={'http-equiv': re.compile('refresh', re.I)})
+                    if meta_refresh and meta_refresh.get('content'):
+                        redirect_url = re.search(r'url=(.+)', meta_refresh.get('content', ''), re.I)
+                        if redirect_url:
+                            download_links.insert(0, redirect_url.group(1))
+                    
+                    # Try to find script tags with download URLs
+                    for script in soup.find_all('script'):
+                        if script.string:
+                            # Look for URLs in script
+                            urls = re.findall(r'https?://[^\s"\'<>]+\.(?:pdf|png|jpg|jpeg)', script.string, re.I)
+                            download_links.extend(urls)
+                    
+                    # Try alternative: use /download endpoint
+                    if '/public/' in url:
+                        # Try Mail.ru Cloud download endpoint
+                        # Format: https://cloud.mail.ru/public/[hash]/[filename] -> https://cloud.mail.ru/api/v2/file/download?weblink=[hash]&key=[timestamp]
+                        import re
+                        match = re.search(r'/public/([^/]+)/([^/]+)$', url)
+                        if match:
+                            folder_hash = match.group(1)
+                            filename = match.group(2)
+                            # Try direct download endpoint
+                            download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={folder_hash}/{filename}"
+                            api_logger.info(f"Trying alternative download URL: {download_url}")
+                            alt_response = self.session.get(download_url, timeout=30, stream=True, allow_redirects=True)
+                            if alt_response.status_code == 200:
+                                alt_content = alt_response.content
+                                # Check if it's actually a file
+                                if len(alt_content) > 4 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
+                                    api_logger.info(f"Successfully downloaded using alternative URL")
+                                    return alt_content
+                    
+                    # If we found download links, try the first one
+                    if download_links:
+                        api_logger.info(f"Found {len(download_links)} potential download links, trying first: {download_links[0]}")
+                        alt_response = self.session.get(download_links[0], timeout=30, stream=True, allow_redirects=True)
+                        alt_response.raise_for_status()
+                        alt_content = alt_response.content
+                        if len(alt_content) > 4 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
+                            return alt_content
+                    
+                    raise ValueError(f"Mail.ru Cloud returned HTML instead of file. This may indicate the file is not publicly accessible or the URL is incorrect. Content-Type: {content_type}")
+            
+            # Validate it's actually a file (not HTML)
+            if len(content) > 4:
+                first_bytes = content[:4]
+                if first_bytes[0:2] == b'<!' or b'<html' in content[:100].lower():
+                    raise ValueError(f"Server returned HTML instead of file. First bytes: {first_bytes.hex()}")
+            
+            return content
         except Exception as e:
             api_logger.error(f"Error downloading file: {str(e)}")
             raise
