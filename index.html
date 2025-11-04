@@ -843,61 +843,8 @@
       </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js" onload="initPdfJs()"></script>
-    <script>
-      // Initialize PDF.js when script loads
-      function initPdfJs() {
-        // PDF.js from CDN exposes itself as a global variable
-        // Try multiple ways to access it
-        let pdfLib = null;
-        
-        // Method 1: Direct access (if script exposes it)
-        if (typeof pdfjsLib !== 'undefined') {
-          pdfLib = pdfjsLib;
-        }
-        // Method 2: Check window object
-        else if (window.pdfjsLib) {
-          pdfLib = window.pdfjsLib;
-        }
-        // Method 3: Check if it's attached to window automatically
-        else if (window.pdfjs && typeof window.pdfjs.getDocument === 'function') {
-          pdfLib = window.pdfjs;
-        }
-        
-        if (pdfLib) {
-          // Make sure it's available on window
-          window.pdfjsLib = pdfLib;
-          
-          // Configure worker source for CDN - use version from library
-          if (typeof pdfLib.GlobalWorkerOptions !== 'undefined') {
-            const version = pdfLib.version || '4.10.38';
-            pdfLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.js`;
-            console.log('PDF.js worker configured in index.html:', pdfLib.GlobalWorkerOptions.workerSrc);
-          }
-          
-          console.log('PDF.js initialized:', {
-            version: pdfLib.version || 'unknown',
-            hasGetDocument: typeof pdfLib.getDocument === 'function',
-            availableOnWindow: typeof window.pdfjsLib !== 'undefined'
-          });
-        } else {
-          console.warn('PDF.js script loaded but library not found. Checking window object...');
-          console.log('window keys containing "pdf":', Object.keys(window).filter(k => k.toLowerCase().includes('pdf')));
-          // Try to find it after a delay (script might still be loading)
-          setTimeout(() => {
-            if (typeof pdfjsLib !== 'undefined') {
-              window.pdfjsLib = pdfjsLib;
-              console.log('PDF.js found after delay');
-            }
-          }, 100);
-        }
-      }
-      
-      // Also try to initialize immediately if script already loaded
-      if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        setTimeout(initPdfJs, 0);
-      }
-    </script>
+    <!-- PDF.js is loaded from npm package (pdfjs-dist) - no need for CDN script tag -->
+    <!-- Removing CDN script to avoid version conflicts (npm package uses 4.10.38, CDN had 4.0.379) -->
     <script type="module" src="/src/gui.js"></script>
   </body>
 </html>
