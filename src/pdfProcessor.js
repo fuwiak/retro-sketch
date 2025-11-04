@@ -32,32 +32,57 @@ export async function renderPdfPreview(file, canvas) {
   try {
     // Use PDF.js for client-side rendering if available
     const pdfjs = await getPdfJs();
-    if (pdfjs) {
+    if (pdfjs && typeof pdfjs.getDocument === 'function') {
+      console.log('Using PDF.js for rendering');
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+      
+      // Load PDF document
+      const loadingTask = pdfjs.getDocument({ 
+        data: arrayBuffer,
+        verbosity: 0 // Reduce console output
+      });
+      
+      const pdf = await loadingTask.promise;
       const page = await pdf.getPage(1);
       const viewport = page.getViewport({ scale: 2.0 });
       
+      // Set canvas size
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       
+      // Render page to canvas
       const context = canvas.getContext('2d');
-      await page.render({
+      const renderContext = {
         canvasContext: context,
         viewport: viewport
-      }).promise;
+      };
       
+      await page.render(renderContext).promise;
+      
+      console.log('PDF rendered successfully on canvas');
+      // Return data URL of rendered canvas
       return canvas.toDataURL('image/png');
     } else {
+      console.log('PDF.js not available, using iframe fallback');
       // Fallback: create object URL for iframe preview
       const url = URL.createObjectURL(file);
       return url;
     }
   } catch (error) {
     console.error('Error rendering PDF preview:', error);
-    // Fallback on error
-    const url = URL.createObjectURL(file);
-    return url;
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    // Fallback on error - use iframe
+    try {
+      const url = URL.createObjectURL(file);
+      return url;
+    } catch (fallbackError) {
+      console.error('Fallback also failed:', fallbackError);
+      throw new Error(`Failed to render PDF: ${error.message}`);
+    }
   }
 }
 

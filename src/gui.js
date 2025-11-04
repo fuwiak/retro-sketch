@@ -1891,24 +1891,39 @@ async function handlePdfFile(file) {
     // Render PDF on canvas
     const preview = await pdfProcessor.renderPdfPreview(file, els.pdfCanvas);
     
-    // Show canvas in preview
-    els.pdfPreview.innerHTML = '';
-    els.pdfCanvas.style.display = 'block';
+    // Clear preview and show it
     els.pdfPreviewPlaceholder.style.display = 'none';
     els.pdfPreview.classList.remove('hidden');
     els.togglePdf.textContent = '📄 Hide Preview';
     
     // If renderPdfPreview returned a URL (fallback), use iframe
     if (typeof preview === 'string' && !preview.startsWith('data:')) {
-      els.pdfPreview.innerHTML = `<iframe src="${preview}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+      // Object URL - use iframe with PDF.js viewer or direct PDF
+      els.pdfPreview.innerHTML = `<iframe src="${preview}" style="width: 100%; height: 100%; border: none;" onerror="this.parentElement.innerHTML='<p style=\\'opacity: 0.6; text-align: center; padding: 20px;\\'>Failed to load PDF. Please try downloading the file.</p>'"></iframe>`;
       els.pdfCanvas.style.display = 'none';
     } else if (typeof preview === 'string' && preview.startsWith('data:')) {
-      // Image data URL - show as image
-      els.pdfPreview.innerHTML = `<img src="${preview}" style="max-width: 100%; height: auto;" />`;
+      // Image data URL - show as image (canvas was rendered successfully)
+      els.pdfPreview.innerHTML = '';
+      els.pdfCanvas.style.display = 'block';
+      // Ensure canvas is in the preview container
+      if (!els.pdfCanvas.parentElement || els.pdfCanvas.parentElement !== els.pdfPreview) {
+        els.pdfPreview.appendChild(els.pdfCanvas);
+      }
+      // Also show as image for better compatibility
+      const img = document.createElement('img');
+      img.src = preview;
+      img.style.cssText = 'max-width: 100%; height: auto; display: block;';
+      els.pdfPreview.innerHTML = '';
+      els.pdfPreview.appendChild(img);
       els.pdfCanvas.style.display = 'none';
     } else {
-      // Canvas was rendered, show it
-      els.pdfPreview.appendChild(els.pdfCanvas);
+      // Canvas was rendered directly, show it
+      els.pdfPreview.innerHTML = '';
+      els.pdfCanvas.style.display = 'block';
+      // Ensure canvas is in the preview container
+      if (!els.pdfCanvas.parentElement || els.pdfCanvas.parentElement !== els.pdfPreview) {
+        els.pdfPreview.appendChild(els.pdfCanvas);
+      }
     }
     
     log(`✓ PDF loaded: ${file.name}`);
