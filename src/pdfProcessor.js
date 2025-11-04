@@ -14,9 +14,22 @@ async function getPdfJs(maxRetries = 10, retryDelay = 100) {
       if (!pdfjsImportPromise) {
         pdfjsImportPromise = (async () => {
           try {
-            // PDF.js 4.x uses ES modules - import from specific build path
-            // pdfjs-dist exports the library from the build directory
-            const pdfjsModule = await import('pdfjs-dist/build/pdf.mjs');
+            // PDF.js 4.x uses ES modules - try different import paths
+            // Try standard import first, then build path
+            let pdfjsModule = null;
+            try {
+              pdfjsModule = await import('pdfjs-dist');
+            } catch (e1) {
+              try {
+                pdfjsModule = await import('pdfjs-dist/build/pdf.mjs');
+              } catch (e2) {
+                try {
+                  pdfjsModule = await import('pdfjs-dist/build/pdf.js');
+                } catch (e3) {
+                  throw new Error(`All import paths failed: ${e1.message}, ${e2.message}, ${e3.message}`);
+                }
+              }
+            }
             
             console.log('PDF.js module imported:', {
               hasDefault: !!pdfjsModule.default,
