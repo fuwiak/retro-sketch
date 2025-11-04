@@ -39,20 +39,13 @@ async function getPdfJs(maxRetries = 10, retryDelay = 100) {
               // Configure worker - use worker from npm package or match version
               if (typeof lib.GlobalWorkerOptions !== 'undefined') {
                 const version = lib.version || '4.10.38';
-                // Try to use bundled worker from npm package first
-                try {
-                  // PDF.js 4.x uses ES modules, worker path should be relative or from npm
-                  const workerPath = new URL(
-                    'pdfjs-dist/build/pdf.worker.min.mjs',
-                    import.meta.url
-                  ).toString();
-                  lib.GlobalWorkerOptions.workerSrc = workerPath;
-                  console.log('Using bundled worker from npm package:', workerPath);
-                } catch (workerError) {
-                  // Fallback to CDN worker matching the version
-                  console.warn('Bundled worker not available, using CDN worker:', workerError.message);
-                  lib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.js`;
-                }
+                // Use CDN worker matching the library version (more reliable than bundled)
+                // CDN worker ensures compatibility and avoids build path issues
+                lib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.js`;
+                console.log('PDF.js worker configured:', {
+                  version: version,
+                  workerSrc: lib.GlobalWorkerOptions.workerSrc
+                });
               }
               console.log('PDF.js loaded from npm package (pdfjs-dist):', {
                 version: lib.version || 'unknown',

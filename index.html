@@ -868,9 +868,11 @@
           // Make sure it's available on window
           window.pdfjsLib = pdfLib;
           
-          // Configure worker source for CDN
+          // Configure worker source for CDN - use version from library
           if (typeof pdfLib.GlobalWorkerOptions !== 'undefined') {
-            pdfLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+            const version = pdfLib.version || '4.10.38';
+            pdfLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.js`;
+            console.log('PDF.js worker configured in index.html:', pdfLib.GlobalWorkerOptions.workerSrc);
           }
           
           console.log('PDF.js initialized:', {
