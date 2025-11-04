@@ -14,33 +14,33 @@ async function getPdfJs(maxRetries = 10, retryDelay = 100) {
       if (!pdfjsImportPromise) {
         pdfjsImportPromise = (async () => {
           try {
-            // PDF.js 4.x uses ES modules, import the main module
-            const pdfjsModule = await import('pdfjs-dist');
+            // PDF.js 4.x uses ES modules - import from specific build path
+            // pdfjs-dist exports the library from the build directory
+            const pdfjsModule = await import('pdfjs-dist/build/pdf.mjs');
             
-            // PDF.js 4.x exports differently - check all possible exports
+            console.log('PDF.js module imported:', {
+              hasDefault: !!pdfjsModule.default,
+              hasGetDocument: typeof pdfjsModule.getDocument === 'function',
+              keys: Object.keys(pdfjsModule).slice(0, 10)
+            });
+            
+            // PDF.js 4.x exports the library as the module itself
+            // All functions (getDocument, etc.) are direct exports
             let lib = null;
             
-            // Try different export patterns
+            // Check if getDocument is directly exported
             if (pdfjsModule.getDocument && typeof pdfjsModule.getDocument === 'function') {
-              // Named export - entire module is the library
               lib = pdfjsModule;
-            } else if (pdfjsModule.default && pdfjsModule.default.getDocument) {
-              // Default export
+            } else if (pdfjsModule.default) {
+              // Try default export
               lib = pdfjsModule.default;
-            } else if (pdfjsModule.pdfjsLib && pdfjsModule.pdfjsLib.getDocument) {
-              // Named pdfjsLib export
-              lib = pdfjsModule.pdfjsLib;
-            } else if (typeof pdfjsModule === 'object' && pdfjsModule.getDocument) {
-              // Module itself
-              lib = pdfjsModule;
             }
             
             if (lib && typeof lib.getDocument === 'function') {
-              // Configure worker - use worker from npm package or match version
+              // Configure worker - use CDN worker matching the library version
               if (typeof lib.GlobalWorkerOptions !== 'undefined') {
                 const version = lib.version || '4.10.38';
-                // Use CDN worker matching the library version (more reliable than bundled)
-                // CDN worker ensures compatibility and avoids build path issues
+                // Use CDN worker - ensure it exists for this version
                 lib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.js`;
                 console.log('PDF.js worker configured:', {
                   version: version,
@@ -50,17 +50,20 @@ async function getPdfJs(maxRetries = 10, retryDelay = 100) {
               console.log('PDF.js loaded from npm package (pdfjs-dist):', {
                 version: lib.version || 'unknown',
                 hasGetDocument: typeof lib.getDocument === 'function',
-                workerSrc: lib.GlobalWorkerOptions?.workerSrc || 'not set',
-                moduleKeys: Object.keys(pdfjsModule)
+                workerSrc: lib.GlobalWorkerOptions?.workerSrc || 'not set'
               });
               return lib;
             } else {
-              console.warn('PDF.js module loaded but getDocument not found. Module keys:', Object.keys(pdfjsModule));
+              console.error('PDF.js module loaded but getDocument not found.', {
+                moduleType: typeof pdfjsModule,
+                hasGetDocument: typeof pdfjsModule.getDocument,
+                moduleKeys: Object.keys(pdfjsModule).slice(0, 20)
+              });
               return null;
             }
           } catch (importError) {
-            console.warn('PDF.js npm import failed, trying CDN:', importError.message);
-            console.warn('Import error details:', importError);
+            console.error('PDF.js npm import failed:', importError.message);
+            console.error('Import error details:', importError);
             return null;
           }
         })();
