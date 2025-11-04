@@ -1886,22 +1886,75 @@ async function loadFileFromCloud(url, fileName) {
 
 async function handlePdfFile(file) {
   currentPdfFile = file;
-  await pdfProcessor.renderPdfPreview(file, els.pdfCanvas);
-  els.pdfPreviewPlaceholder.style.display = 'none';
-  els.pdfPreview.classList.remove('hidden');
-  els.togglePdf.textContent = '📄 Hide Preview';
-  log(`✓ PDF loaded: ${file.name}`);
-  playTeleportFX();
+  
+  try {
+    // Render PDF on canvas
+    const preview = await pdfProcessor.renderPdfPreview(file, els.pdfCanvas);
+    
+    // Show canvas in preview
+    els.pdfPreview.innerHTML = '';
+    els.pdfCanvas.style.display = 'block';
+    els.pdfPreviewPlaceholder.style.display = 'none';
+    els.pdfPreview.classList.remove('hidden');
+    els.togglePdf.textContent = '📄 Hide Preview';
+    
+    // If renderPdfPreview returned a URL (fallback), use iframe
+    if (typeof preview === 'string' && !preview.startsWith('data:')) {
+      els.pdfPreview.innerHTML = `<iframe src="${preview}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+      els.pdfCanvas.style.display = 'none';
+    } else if (typeof preview === 'string' && preview.startsWith('data:')) {
+      // Image data URL - show as image
+      els.pdfPreview.innerHTML = `<img src="${preview}" style="max-width: 100%; height: auto;" />`;
+      els.pdfCanvas.style.display = 'none';
+    } else {
+      // Canvas was rendered, show it
+      els.pdfPreview.appendChild(els.pdfCanvas);
+    }
+    
+    log(`✓ PDF loaded: ${file.name}`);
+    playTeleportFX();
+  } catch (error) {
+    console.error('Error rendering PDF:', error);
+    els.pdfPreview.innerHTML = `<p style="opacity: 0.6; text-align: center; padding: 20px;">Error loading PDF: ${error.message}</p>`;
+    els.pdfPreview.classList.remove('hidden');
+    els.pdfPreviewPlaceholder.style.display = 'none';
+  }
 }
 
 function renderImageOnCanvas(sourceCanvas) {
-  els.pdfCanvas.width = sourceCanvas.width;
-  els.pdfCanvas.height = sourceCanvas.height;
+  // Scale canvas to fit preview while maintaining aspect ratio
+  const maxWidth = 1200;
+  const maxHeight = 800;
+  let canvasWidth = sourceCanvas.width;
+  let canvasHeight = sourceCanvas.height;
+  
+  // Calculate scale to fit
+  const scale = Math.min(maxWidth / canvasWidth, maxHeight / canvasHeight, 1.0);
+  canvasWidth = Math.floor(canvasWidth * scale);
+  canvasHeight = Math.floor(canvasHeight * scale);
+  
+  // Set canvas size
+  els.pdfCanvas.width = canvasWidth;
+  els.pdfCanvas.height = canvasHeight;
+  
+  // Draw scaled image
   const ctx = els.pdfCanvas.getContext('2d');
-  ctx.drawImage(sourceCanvas, 0, 0);
+  ctx.drawImage(sourceCanvas, 0, 0, canvasWidth, canvasHeight);
+  
+  // Show canvas in preview
+  els.pdfPreview.innerHTML = '';
+  els.pdfCanvas.style.display = 'block';
+  els.pdfPreview.appendChild(els.pdfCanvas);
   els.pdfPreviewPlaceholder.style.display = 'none';
   els.pdfPreview.classList.remove('hidden');
   els.togglePdf.textContent = '📄 Hide Preview';
+  
+  // Store as current PDF file (for processing)
+  if (sourceCanvas.toBlob) {
+    sourceCanvas.toBlob((blob) => {
+      currentPdfFile = new File([blob], 'image.png', { type: 'image/png' });
+    }, 'image/png');
+  }
 }
 
 els.loadCloudFolderBtn.addEventListener("click", async () => {
