@@ -1546,6 +1546,7 @@ async function loadCloudFolder(url, append = false) {
     
     const data = await response.json();
     console.log('Response data:', data);
+    console.log('Items count:', data.items?.length);
     
     // Update pagination state
     cloudFolderPagination.offset = data.pagination?.offset || cloudFolderPagination.offset;
@@ -1555,9 +1556,11 @@ async function loadCloudFolder(url, append = false) {
     // Add new items to loaded items (items = folders + files)
     if (data.items && data.items.length > 0) {
       cloudFolderPagination.loadedFiles.push(...data.items);
+      console.log('Total loaded items:', cloudFolderPagination.loadedFiles.length);
     }
     
     // Render all loaded items
+    console.log('Rendering with items:', cloudFolderPagination.loadedFiles.length);
     renderCloudFolder({
       items: cloudFolderPagination.loadedFiles,
       pagination: data.pagination
@@ -1565,7 +1568,9 @@ async function loadCloudFolder(url, append = false) {
     
     const loadedCount = cloudFolderPagination.loadedFiles.length;
     const totalCount = cloudFolderPagination.total || loadedCount;
-    els.cloudFolderStatus.textContent = `✓ Loaded ${loadedCount}${totalCount > loadedCount ? `/${totalCount}` : ''} files${cloudFolderPagination.hasMore ? ' (more available)' : ''}`;
+    const foldersCount = cloudFolderPagination.loadedFiles.filter(i => i.type === 'folder').length;
+    const filesCount = cloudFolderPagination.loadedFiles.filter(i => i.type === 'file').length;
+    els.cloudFolderStatus.textContent = `✓ Loaded ${foldersCount} folders, ${filesCount} files${totalCount > loadedCount ? ` (${totalCount} total)` : ''}${cloudFolderPagination.hasMore ? ' - more available' : ''}`;
   } catch (error) {
     console.error('Error loading cloud folder:', error);
     console.error('Error details:', {
@@ -1610,6 +1615,9 @@ async function loadMoreCloudFiles() {
 }
 
 function renderCloudFolder(data) {
+  console.log('renderCloudFolder called with:', data);
+  console.log('items length:', data?.items?.length);
+  
   if (!data || !data.items || data.items.length === 0) {
     els.cloudFolderContent.innerHTML = '<div style="padding: 10px; opacity: 0.7;">No items found</div>';
     return;
@@ -1617,28 +1625,47 @@ function renderCloudFolder(data) {
   
   let html = '';
   
+  // Filter box
+  html += `<div style="margin-bottom: 10px; padding: 5px;">
+    <input type="text" id="cloudFolderFilter" placeholder="🔍 Filter by name..." style="
+      width: 100%;
+      padding: 5px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--ui-color);
+      color: var(--ui-color);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.9rem;
+    " />
+  </div>`;
+  
   // Render items (folders and files) - LAZY: folders are expandable
   data.items.forEach(item => {
     if (item.type === 'folder') {
       // Folder - make it expandable
       html += `<div class="cloud-folder-expandable" style="
-        padding: 5px;
+        padding: 8px 5px;
         cursor: pointer;
         user-select: none;
         border-left: 3px solid transparent;
-      " data-folder-url="${item.url}" data-folder-name="${item.name}">
+        transition: all 0.2s;
+      " data-folder-url="${item.url}" data-folder-name="${item.name}" onmouseover="this.style.borderLeftColor='var(--ui-color)'; this.style.background='rgba(255,0,0,0.1)';" onmouseout="this.style.borderLeftColor='transparent'; this.style.background='transparent';">
         <span class="folder-icon">📁</span>
         <span class="folder-name">${item.name}</span>
-        <span class="folder-expand" style="float: right; opacity: 0.5;">▶</span>
+        <span class="folder-expand" style="float: right; opacity: 0.5; transition: transform 0.2s;">▶</span>
         <div class="folder-files" style="display: none; margin-left: 20px; padding-left: 10px; border-left: 2px solid var(--ui-color);">
-          <div style="padding: 5px; opacity: 0.7;">Loading...</div>
+          <div style="padding: 5px; opacity: 0.7;">⏳ Loading files...</div>
         </div>
       </div>`;
     } else {
       // File - clickable
       const icon = item.name.match(/\.(pdf|png|jpg|jpeg)$/i) ? 
         (item.name.match(/\.pdf$/i) ? '📄' : '🖼️') : '📄';
-      html += `<div class="cloud-file-item" data-url="${item.url || item.download_url}" data-name="${item.name}" style="padding: 5px; cursor: pointer;">
+      html += `<div class="cloud-file-item" data-url="${item.url || item.download_url}" data-name="${item.name}" style="
+        padding: 8px 5px;
+        cursor: pointer;
+        transition: all 0.2s;
+        border-left: 2px solid transparent;
+      " onmouseover="this.style.borderLeftColor='var(--ui-color)'; this.style.background='rgba(255,0,0,0.1)';" onmouseout="this.style.borderLeftColor='transparent'; this.style.background='transparent';">
         ${icon} ${item.name}
       </div>`;
     }
@@ -1661,6 +1688,24 @@ function renderCloudFolder(data) {
   }
   
   els.cloudFolderContent.innerHTML = html;
+  
+  // Add filter functionality
+  const filterInput = els.cloudFolderContent.querySelector('#cloudFolderFilter');
+  if (filterInput) {
+    filterInput.addEventListener('input', (e) => {
+      const filter = e.target.value.toLowerCase().trim();
+      const allItems = els.cloudFolderContent.querySelectorAll('.cloud-folder-expandable, .cloud-file-item');
+      
+      allItems.forEach(item => {
+        const name = item.textContent.toLowerCase();
+        if (filter === '' || name.includes(filter)) {
+          item.style.display = '';
+        } else {
+          item.style.display = 'none';
+        }
+      });
+    });
+  }
   
   // Add click handlers for files
   els.cloudFolderContent.querySelectorAll('.cloud-file-item').forEach(item => {
@@ -1687,15 +1732,16 @@ function renderCloudFolder(data) {
       if (filesContainer.style.display === 'none') {
         // Expand - load files LAZY
         expandIcon.textContent = '▼';
+        expandIcon.style.transform = 'rotate(90deg)';
         filesContainer.style.display = 'block';
         
         // Check if already loaded
-        if (filesContainer.querySelector('.cloud-file-item')) {
+        if (filesContainer.querySelector('.cloud-file-item') || filesContainer.querySelector('.cloud-folder-expandable')) {
           return; // Already loaded
         }
         
         // Load files from folder
-        filesContainer.innerHTML = '<div style="padding: 5px; opacity: 0.7;">⏳ Loading...</div>';
+        filesContainer.innerHTML = '<div style="padding: 5px; opacity: 0.7;">⏳ Loading files...</div>';
         try {
           const apiUrl = getApiBaseUrl();
           const endpointUrl = `${apiUrl}/cloud/folder/files`;
@@ -1755,6 +1801,7 @@ function renderCloudFolder(data) {
       } else {
         // Collapse
         expandIcon.textContent = '▶';
+        expandIcon.style.transform = 'rotate(0deg)';
         filesContainer.style.display = 'none';
       }
       playClick(400);
