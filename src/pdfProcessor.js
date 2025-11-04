@@ -4,21 +4,73 @@
 import { API_BASE_URL } from './config.js';
 
 let pdfjsLib = null;
+let pdfjsImportPromise = null;
 
 // Dynamically import PDF.js with retry mechanism
 async function getPdfJs(maxRetries = 10, retryDelay = 100) {
   if (!pdfjsLib) {
     try {
-      // Try to use CDN version if available globally
+      // First, try to import from npm package (pdfjs-dist)
+      if (!pdfjsImportPromise) {
+        pdfjsImportPromise = (async () => {
+          try {
+            const pdfjsModule = await import('pdfjs-dist');
+            // PDF.js 4.x exports as default or named export
+            const lib = pdfjsModule.default || pdfjsModule || pdfjsModule.pdfjsLib;
+            if (lib && typeof lib.getDocument === 'function') {
+              // Configure worker
+              if (typeof lib.GlobalWorkerOptions !== 'undefined') {
+                lib.GlobalWorkerOptions.workerSrc = new URL(
+                  'pdfjs-dist/build/pdf.worker.min.mjs',
+                  import.meta.url
+                ).toString();
+              }
+              console.log('PDF.js loaded from npm package (pdfjs-dist)');
+              return lib;
+            }
+          } catch (importError) {
+            console.debug('PDF.js npm import failed, trying CDN:', importError.message);
+            return null;
+          }
+        })();
+      }
+      
+      const npmLib = await pdfjsImportPromise;
+      if (npmLib) {
+        pdfjsLib = npmLib;
+        return pdfjsLib;
+      }
+      
+      // Fallback: Try to use CDN version if available globally
       if (typeof window !== 'undefined') {
         // Wait for PDF.js to be available (it loads asynchronously from CDN)
         for (let attempt = 0; attempt < maxRetries; attempt++) {
           // PDF.js from CDN might be available in multiple ways:
-          // 1. window.pdfjsLib (from CDN script tag)
-          // 2. window.pdfjs (alternative name)
-          // 3. Check if script tag loaded it
-          const possibleLib = window.pdfjsLib || window.pdfjs || 
+          // Check all possible global variable names
+          const possibleLib = window.pdfjsLib || 
+                            window.pdfjs || 
+                            window.pdfjsLib?.pdfjsLib ||
                             (typeof pdfjsLib !== 'undefined' ? pdfjsLib : null);
+          
+          // Also check if it's a UMD module that exports differently
+          if (!possibleLib) {
+            // Check for PDF.js in various formats
+            const scripts = Array.from(document.querySelectorAll('script[src*="pdf"]'));
+            for (const script of scripts) {
+              if (script.src.includes('pdf.js') || script.src.includes('pdfjs')) {
+                // Try to access after script loads
+                try {
+                  const checkLib = window.pdfjsLib || window.pdfjs || window.pdf || null;
+                  if (checkLib && typeof checkLib.getDocument === 'function') {
+                    pdfjsLib = checkLib;
+                    break;
+                  }
+                } catch (e) {
+                  // Continue searching
+                }
+              }
+            }
+          }
           
           if (possibleLib && typeof possibleLib.getDocument === 'function') {
             pdfjsLib = possibleLib;
@@ -30,7 +82,7 @@ async function getPdfJs(maxRetries = 10, retryDelay = 100) {
               }
             }
             
-            console.log('PDF.js available:', {
+            console.log('PDF.js available from CDN:', {
               version: pdfjsLib.version || 'unknown',
               hasGetDocument: typeof pdfjsLib.getDocument === 'function',
               hasGlobalWorkerOptions: typeof pdfjsLib.GlobalWorkerOptions !== 'undefined',
@@ -51,6 +103,7 @@ async function getPdfJs(maxRetries = 10, retryDelay = 100) {
             Object.keys(window).filter(k => k.toLowerCase().includes('pdf')));
           console.warn('window.pdfjsLib:', window.pdfjsLib);
           console.warn('window.pdfjs:', window.pdfjs);
+          console.warn('window.pdf:', window.pdf);
           pdfjsLib = null;
         }
       }
