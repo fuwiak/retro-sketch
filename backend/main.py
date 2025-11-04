@@ -362,11 +362,24 @@ async def get_cloud_file(request: CloudFileRequest):
         file_content = cloud_service.download_file(request.url)
         log_api_response("POST", "/api/cloud/file", 200, 0.0)
         api_logger.info(f"File downloaded: {request.fileName} ({len(file_content)} bytes)")
+        
+        # Handle Unicode filenames properly (RFC 5987)
+        import urllib.parse
+        # Encode filename for Content-Disposition header
+        # Use ASCII fallback and RFC 5987 encoding for Unicode
+        safe_filename = request.fileName.encode('ascii', 'ignore').decode('ascii')
+        if safe_filename != request.fileName:
+            # Contains non-ASCII characters, use RFC 5987 encoding
+            encoded_filename = urllib.parse.quote(request.fileName, safe='')
+            content_disposition = f"attachment; filename=\"{safe_filename}\"; filename*=UTF-8''{encoded_filename}"
+        else:
+            content_disposition = f'attachment; filename="{request.fileName}"'
+        
         return Response(
             content=file_content,
             media_type="application/octet-stream",
             headers={
-                "Content-Disposition": f'attachment; filename="{request.fileName}"'
+                "Content-Disposition": content_disposition
             }
         )
     except Exception as e:
