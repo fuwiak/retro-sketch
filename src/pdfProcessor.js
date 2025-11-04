@@ -3,166 +3,83 @@
 
 import { API_BASE_URL } from './config.js';
 
+// Static import of PDF.js for Vite build compatibility
+// PDF.js 4.x exports everything directly from the module
 let pdfjsLib = null;
-let pdfjsImportPromise = null;
 
-// Dynamically import PDF.js with retry mechanism
+// Initialize PDF.js - try static import first
+try {
+  // Static import works with Vite build
+  const pdfjsModule = await import('pdfjs-dist');
+  
+  // PDF.js 4.x exports functions directly (getDocument, etc.)
+  if (pdfjsModule.getDocument && typeof pdfjsModule.getDocument === 'function') {
+    pdfjsLib = pdfjsModule;
+    
+    // Configure worker - use CDN worker matching the library version
+    if (typeof pdfjsLib.GlobalWorkerOptions !== 'undefined') {
+      const version = pdfjsLib.version || '4.10.38';
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.js`;
+      console.log('PDF.js initialized:', {
+        version: version,
+        workerSrc: pdfjsLib.GlobalWorkerOptions.workerSrc,
+        hasGetDocument: typeof pdfjsLib.getDocument === 'function'
+      });
+    }
+  } else if (pdfjsModule.default && typeof pdfjsModule.default.getDocument === 'function') {
+    pdfjsLib = pdfjsModule.default;
+    
+    if (typeof pdfjsLib.GlobalWorkerOptions !== 'undefined') {
+      const version = pdfjsLib.version || '4.10.38';
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.js`;
+      console.log('PDF.js initialized (default export):', {
+        version: version,
+        workerSrc: pdfjsLib.GlobalWorkerOptions.workerSrc
+      });
+    }
+  }
+} catch (importError) {
+  console.warn('PDF.js static import failed, will try dynamic import:', importError.message);
+}
+
+// Dynamically import PDF.js with retry mechanism (fallback)
 async function getPdfJs(maxRetries = 10, retryDelay = 100) {
-  if (!pdfjsLib) {
-    try {
-      // First, try to import from npm package (pdfjs-dist)
-      if (!pdfjsImportPromise) {
-        pdfjsImportPromise = (async () => {
-          try {
-            // PDF.js 4.x uses ES modules - try different import paths
-            // Try standard import first, then build path
-            let pdfjsModule = null;
-            try {
-              pdfjsModule = await import('pdfjs-dist');
-            } catch (e1) {
-              try {
-                pdfjsModule = await import('pdfjs-dist/build/pdf.mjs');
-              } catch (e2) {
-                try {
-                  pdfjsModule = await import('pdfjs-dist/build/pdf.js');
-                } catch (e3) {
-                  throw new Error(`All import paths failed: ${e1.message}, ${e2.message}, ${e3.message}`);
-                }
-              }
-            }
-            
-            console.log('PDF.js module imported:', {
-              hasDefault: !!pdfjsModule.default,
-              hasGetDocument: typeof pdfjsModule.getDocument === 'function',
-              keys: Object.keys(pdfjsModule).slice(0, 10)
-            });
-            
-            // PDF.js 4.x exports the library as the module itself
-            // All functions (getDocument, etc.) are direct exports
-            let lib = null;
-            
-            // Check if getDocument is directly exported
-            if (pdfjsModule.getDocument && typeof pdfjsModule.getDocument === 'function') {
-              lib = pdfjsModule;
-            } else if (pdfjsModule.default) {
-              // Try default export
-              lib = pdfjsModule.default;
-            }
-            
-            if (lib && typeof lib.getDocument === 'function') {
-              // Configure worker - use CDN worker matching the library version
-              if (typeof lib.GlobalWorkerOptions !== 'undefined') {
-                const version = lib.version || '4.10.38';
-                // Use CDN worker - ensure it exists for this version
-                lib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.js`;
-                console.log('PDF.js worker configured:', {
-                  version: version,
-                  workerSrc: lib.GlobalWorkerOptions.workerSrc
-                });
-              }
-              console.log('PDF.js loaded from npm package (pdfjs-dist):', {
-                version: lib.version || 'unknown',
-                hasGetDocument: typeof lib.getDocument === 'function',
-                workerSrc: lib.GlobalWorkerOptions?.workerSrc || 'not set'
-              });
-              return lib;
-            } else {
-              console.error('PDF.js module loaded but getDocument not found.', {
-                moduleType: typeof pdfjsModule,
-                hasGetDocument: typeof pdfjsModule.getDocument,
-                moduleKeys: Object.keys(pdfjsModule).slice(0, 20)
-              });
-              return null;
-            }
-          } catch (importError) {
-            console.error('PDF.js npm import failed:', importError.message);
-            console.error('Import error details:', importError);
-            return null;
-          }
-        })();
-      }
+  if (pdfjsLib) {
+    return pdfjsLib;
+  }
+  
+  try {
       
-      const npmLib = await pdfjsImportPromise;
-      if (npmLib) {
-        pdfjsLib = npmLib;
-        return pdfjsLib;
-      }
-      
-      // Fallback: Try to use CDN version if available globally
-      if (typeof window !== 'undefined') {
-        // Wait for PDF.js to be available (it loads asynchronously from CDN)
-        for (let attempt = 0; attempt < maxRetries; attempt++) {
-          // PDF.js from CDN might be available in multiple ways:
-          // Check all possible global variable names
-          const possibleLib = window.pdfjsLib || 
-                            window.pdfjs || 
-                            window.pdfjsLib?.pdfjsLib ||
-                            (typeof pdfjsLib !== 'undefined' ? pdfjsLib : null);
-          
-          // Also check if it's a UMD module that exports differently
-          if (!possibleLib) {
-            // Check for PDF.js in various formats
-            const scripts = Array.from(document.querySelectorAll('script[src*="pdf"]'));
-            for (const script of scripts) {
-              if (script.src.includes('pdf.js') || script.src.includes('pdfjs')) {
-                // Try to access after script loads
-                try {
-                  const checkLib = window.pdfjsLib || window.pdfjs || window.pdf || null;
-                  if (checkLib && typeof checkLib.getDocument === 'function') {
-                    pdfjsLib = checkLib;
-                    break;
-                  }
-                } catch (e) {
-                  // Continue searching
-                }
-              }
-            }
-          }
-          
-          if (possibleLib && typeof possibleLib.getDocument === 'function') {
-            pdfjsLib = possibleLib;
-            
-            // Configure worker source if needed - match version to library
-            if (typeof pdfjsLib.GlobalWorkerOptions !== 'undefined') {
-              if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-                const version = pdfjsLib.version || '4.10.38';
-                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.js`;
-              }
-            }
-            
-            console.log('PDF.js available from CDN:', {
-              version: pdfjsLib.version || 'unknown',
-              hasGetDocument: typeof pdfjsLib.getDocument === 'function',
-              hasGlobalWorkerOptions: typeof pdfjsLib.GlobalWorkerOptions !== 'undefined',
-              attempt: attempt + 1
-            });
-            break;
-          }
-          
-          // If not found, wait a bit and retry (PDF.js might still be loading)
-          if (attempt < maxRetries - 1) {
-            await new Promise(resolve => setTimeout(resolve, retryDelay));
-          }
-        }
-        
-        // Verify that getDocument function exists
-        if (!pdfjsLib || typeof pdfjsLib.getDocument !== 'function') {
-          console.warn('PDF.js not found after retries. Available window properties:', 
-            Object.keys(window).filter(k => k.toLowerCase().includes('pdf')));
-          console.warn('window.pdfjsLib:', window.pdfjsLib);
-          console.warn('window.pdfjs:', window.pdfjs);
-          console.warn('window.pdf:', window.pdf);
-          pdfjsLib = null;
-        }
-      }
-      
+      // Fallback: Try dynamic import (if static import failed)
       if (!pdfjsLib) {
-        console.error('PDF.js not available - npm import and CDN both failed');
+        try {
+          const pdfjsModule = await import('pdfjs-dist');
+          if (pdfjsModule.getDocument && typeof pdfjsModule.getDocument === 'function') {
+            pdfjsLib = pdfjsModule;
+          } else if (pdfjsModule.default && typeof pdfjsModule.default.getDocument === 'function') {
+            pdfjsLib = pdfjsModule.default;
+          }
+          
+          if (pdfjsLib && typeof pdfjsLib.GlobalWorkerOptions !== 'undefined') {
+            const version = pdfjsLib.version || '4.10.38';
+            pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.js`;
+            console.log('PDF.js loaded via dynamic import:', {
+              version: version,
+              workerSrc: pdfjsLib.GlobalWorkerOptions.workerSrc
+            });
+          }
+        } catch (dynamicError) {
+          console.warn('PDF.js dynamic import also failed:', dynamicError.message);
+        }
+      }
+      
+      if (!pdfjsLib || typeof pdfjsLib.getDocument !== 'function') {
+        console.error('PDF.js not available - all import methods failed');
         throw new Error('PDF.js library is not available. Please ensure PDF.js is properly loaded.');
       }
     } catch (e) {
       console.error('Error checking PDF.js availability:', e);
-      return null;
+      throw e;
     }
   }
   return pdfjsLib;
