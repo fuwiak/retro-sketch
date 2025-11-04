@@ -1922,12 +1922,26 @@ async function loadFileFromCloud(url, fileName) {
     
     const blob = await response.blob();
     
-    // Handle PDF files
+    // Validate blob
+    if (!blob || blob.size === 0) {
+      throw new Error('Downloaded file is empty');
+    }
+    
+    // Check if blob is actually a PDF (check first bytes)
     if (fileName.match(/\.pdf$/i)) {
+      const firstBytes = await blob.slice(0, 4).arrayBuffer();
+      const pdfHeader = new Uint8Array(firstBytes);
+      const isPdf = pdfHeader[0] === 0x25 && pdfHeader[1] === 0x50 && pdfHeader[2] === 0x44 && pdfHeader[3] === 0x46; // %PDF
+      
+      if (!isPdf) {
+        console.warn('File does not appear to be a valid PDF (missing %PDF header)');
+        log(`⚠️ Warning: File may not be a valid PDF`);
+      }
+      
       const file = new File([blob], fileName, { type: 'application/pdf' });
       await handlePdfFile(file);
       els.cloudFolderStatus.textContent = `✓ Loaded ${fileName}`;
-      log(`✓ Loaded PDF from cloud: ${fileName}`);
+      log(`✓ Loaded PDF from cloud: ${fileName} (${(blob.size / 1024).toFixed(1)} KB)`);
     } 
     // Handle image files (convert to PDF-like canvas)
     else if (fileName.match(/\.(png|jpg|jpeg)$/i)) {

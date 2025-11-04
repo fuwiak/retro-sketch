@@ -85,16 +85,34 @@ async function getPdfJs() {
  */
 export async function renderPdfPreview(file, canvas) {
   try {
+    // Validate file before processing
+    if (!file || file.size === 0) {
+      throw new Error('PDF file is empty');
+    }
+    
     // Use PDF.js for client-side rendering if available
     const pdfjs = await getPdfJs();
     if (pdfjs && typeof pdfjs.getDocument === 'function') {
-      console.log('Using PDF.js for rendering');
+      console.log('Using PDF.js for rendering', { fileSize: file.size, fileName: file.name });
       const arrayBuffer = await file.arrayBuffer();
       
-      // Load PDF document
+      // Validate PDF structure (check first bytes)
+      const pdfHeader = new Uint8Array(arrayBuffer.slice(0, 4));
+      const isPdf = pdfHeader[0] === 0x25 && pdfHeader[1] === 0x50 && pdfHeader[2] === 0x44 && pdfHeader[3] === 0x46; // %PDF
+      
+      if (!isPdf) {
+        console.warn('File does not appear to be a valid PDF (missing %PDF header)');
+        console.warn('First bytes:', Array.from(pdfHeader).map(b => `0x${b.toString(16)}`).join(' '));
+        // Continue anyway - some PDFs might have different structure
+      }
+      
+      // Load PDF document with better error handling
       const loadingTask = pdfjs.getDocument({ 
         data: arrayBuffer,
-        verbosity: 0 // Reduce console output
+        verbosity: 0, // Reduce console output
+        // Add error recovery options
+        stopAtErrors: false,
+        isEvalSupported: false
       });
       
       const pdf = await loadingTask.promise;
@@ -128,15 +146,41 @@ export async function renderPdfPreview(file, canvas) {
     console.error('Error details:', {
       message: error.message,
       stack: error.stack,
-      name: error.name
+      name: error.name,
+      fileName: file?.name,
+      fileSize: file?.size,
+      fileType: file?.type
     });
+    
+    // Check if it's a PDF structure error
+    if (error.name === 'InvalidPDFException' || error.message.includes('Invalid PDF structure')) {
+      console.warn('PDF structure error - file may be corrupted or not a valid PDF');
+      console.warn('Attempting iframe fallback...');
+      
+      // Try to verify file is actually a PDF by checking first bytes
+      try {
+        const firstBytes = await file.slice(0, 4).arrayBuffer();
+        const pdfHeader = new Uint8Array(firstBytes);
+        const isPdf = pdfHeader[0] === 0x25 && pdfHeader[1] === 0x50 && pdfHeader[2] === 0x44 && pdfHeader[3] === 0x46;
+        
+        if (!isPdf) {
+          throw new Error('File is not a valid PDF (missing %PDF header). First bytes: ' + 
+            Array.from(pdfHeader).map(b => `0x${b.toString(16).padStart(2, '0')}`).join(' '));
+        }
+      } catch (validationError) {
+        console.error('PDF validation failed:', validationError);
+        throw new Error(`Invalid PDF file: ${validationError.message}. Original error: ${error.message}`);
+      }
+    }
+    
     // Fallback on error - use iframe
     try {
       const url = URL.createObjectURL(file);
+      console.log('Using iframe fallback for PDF preview');
       return url;
     } catch (fallbackError) {
       console.error('Fallback also failed:', fallbackError);
-      throw new Error(`Failed to render PDF: ${error.message}`);
+      throw new Error(`Failed to render PDF: ${error.message}. Fallback also failed: ${fallbackError.message}`);
     }
   }
 }
