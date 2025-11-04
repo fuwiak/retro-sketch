@@ -845,10 +845,23 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
     <script>
-      // Make PDF.js available globally
-      if (typeof pdfjsLib !== 'undefined') {
-        window.pdfjsLib = pdfjsLib;
-      }
+      // Make PDF.js available globally and configure worker
+      (function() {
+        // Wait for PDF.js to load
+        if (typeof pdfjsLib !== 'undefined') {
+          window.pdfjsLib = pdfjsLib;
+          // Configure worker source for CDN
+          if (typeof pdfjsLib.GlobalWorkerOptions !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+          }
+          console.log('PDF.js initialized:', {
+            version: pdfjsLib.version || 'unknown',
+            hasGetDocument: typeof pdfjsLib.getDocument === 'function'
+          });
+        } else {
+          console.warn('PDF.js not found after script load');
+        }
+      })();
     </script>
     <script type="module" src="/src/gui.js"></script>
   </body>

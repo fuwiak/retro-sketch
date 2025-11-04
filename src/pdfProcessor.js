@@ -11,14 +11,43 @@ async function getPdfJs() {
     try {
       // Try to use CDN version if available globally
       if (typeof window !== 'undefined') {
-        // PDF.js from CDN might be available as pdfjsLib or pdfjs
-        pdfjsLib = window.pdfjsLib || window.pdfjs || null;
+        // PDF.js from CDN might be available in multiple ways:
+        // 1. window.pdfjsLib (from CDN script tag)
+        // 2. window.pdfjs (alternative name)
+        // 3. pdfjsLib (global variable)
+        // 4. Check if PDF.js worker is available
+        pdfjsLib = window.pdfjsLib || window.pdfjs || (typeof pdfjsLib !== 'undefined' ? pdfjsLib : null);
+        
+        // If PDF.js is available but getDocument is not a function, try to configure it
+        if (pdfjsLib && typeof pdfjsLib.getDocument !== 'function') {
+          // Check if it's the worker or needs initialization
+          if (typeof pdfjsLib.GlobalWorkerOptions !== 'undefined') {
+            // Set worker source if needed (CDN usually handles this)
+            if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+              pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+            }
+          }
+        }
+        
+        // Verify that getDocument function exists
+        if (!pdfjsLib || typeof pdfjsLib.getDocument !== 'function') {
+          console.warn('PDF.js loaded but getDocument not available. Available properties:', pdfjsLib ? Object.keys(pdfjsLib) : 'null');
+          pdfjsLib = null;
+        }
       }
+      
       if (!pdfjsLib) {
-        // Fallback: use object URL for iframe
+        console.warn('PDF.js not available, using iframe fallback');
         return null;
       }
+      
+      console.log('PDF.js available:', {
+        version: pdfjsLib.version || 'unknown',
+        hasGetDocument: typeof pdfjsLib.getDocument === 'function',
+        hasGlobalWorkerOptions: typeof pdfjsLib.GlobalWorkerOptions !== 'undefined'
+      });
     } catch (e) {
+      console.error('Error checking PDF.js availability:', e);
       return null;
     }
   }
