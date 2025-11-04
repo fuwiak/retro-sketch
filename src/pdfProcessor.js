@@ -36,14 +36,28 @@ async function getPdfJs(maxRetries = 10, retryDelay = 100) {
             }
             
             if (lib && typeof lib.getDocument === 'function') {
-              // Configure worker - use CDN worker for better compatibility
+              // Configure worker - use worker from npm package or match version
               if (typeof lib.GlobalWorkerOptions !== 'undefined') {
-                // Use CDN worker instead of bundled one for better compatibility
-                lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+                const version = lib.version || '4.10.38';
+                // Try to use bundled worker from npm package first
+                try {
+                  // PDF.js 4.x uses ES modules, worker path should be relative or from npm
+                  const workerPath = new URL(
+                    'pdfjs-dist/build/pdf.worker.min.mjs',
+                    import.meta.url
+                  ).toString();
+                  lib.GlobalWorkerOptions.workerSrc = workerPath;
+                  console.log('Using bundled worker from npm package:', workerPath);
+                } catch (workerError) {
+                  // Fallback to CDN worker matching the version
+                  console.warn('Bundled worker not available, using CDN worker:', workerError.message);
+                  lib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.js`;
+                }
               }
               console.log('PDF.js loaded from npm package (pdfjs-dist):', {
                 version: lib.version || 'unknown',
                 hasGetDocument: typeof lib.getDocument === 'function',
+                workerSrc: lib.GlobalWorkerOptions?.workerSrc || 'not set',
                 moduleKeys: Object.keys(pdfjsModule)
               });
               return lib;
@@ -99,10 +113,11 @@ async function getPdfJs(maxRetries = 10, retryDelay = 100) {
           if (possibleLib && typeof possibleLib.getDocument === 'function') {
             pdfjsLib = possibleLib;
             
-            // Configure worker source if needed
+            // Configure worker source if needed - match version to library
             if (typeof pdfjsLib.GlobalWorkerOptions !== 'undefined') {
               if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+                const version = pdfjsLib.version || '4.10.38';
+                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.js`;
               }
             }
             
