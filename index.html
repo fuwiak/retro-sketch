@@ -843,8 +843,51 @@
       </div>
     </div>
 
-    <!-- PDF.js is loaded from npm package (pdfjs-dist) - no need for CDN script tag -->
-    <!-- Removing CDN script to avoid version conflicts (npm package uses 4.10.38, CDN had 4.0.379) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
+    <script>
+      // Make PDF.js available globally for PDF.js 4.x
+      // PDF.js 4.x exports differently than 3.x
+      (function() {
+        // Try to find PDF.js in various locations
+        if (typeof pdfjsLib !== 'undefined') {
+          window.pdfjsLib = pdfjsLib;
+          console.log('PDF.js loaded: pdfjsLib variable');
+        } else if (typeof pdfjs !== 'undefined') {
+          window.pdfjsLib = pdfjs;
+          console.log('PDF.js loaded: pdfjs variable');
+        } else if (typeof window.pdfjsLib !== 'undefined') {
+          console.log('PDF.js loaded: window.pdfjsLib already exists');
+        } else {
+          // Try to access from global scope
+          try {
+            // PDF.js 4.x might export as a module
+            if (typeof module !== 'undefined' && module.exports) {
+              const pdfjs = require('pdfjs-dist');
+              window.pdfjsLib = pdfjs;
+              console.log('PDF.js loaded: via require');
+            }
+          } catch (e) {
+            console.warn('Could not load PDF.js via require:', e);
+          }
+        }
+        
+        // Verify PDF.js is available
+        if (window.pdfjsLib && typeof window.pdfjsLib.getDocument === 'function') {
+          console.log('PDF.js verified: getDocument function available');
+          // Configure worker for PDF.js 4.x
+          if (window.pdfjsLib.GlobalWorkerOptions) {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+            console.log('PDF.js worker configured');
+          }
+        } else {
+          console.error('PDF.js not properly loaded. Available:', {
+            hasPdfjsLib: typeof window.pdfjsLib !== 'undefined',
+            type: typeof window.pdfjsLib,
+            keys: window.pdfjsLib ? Object.keys(window.pdfjsLib).slice(0, 20) : null
+          });
+        }
+      })();
+    </script>
     <script type="module" src="/src/gui.js"></script>
   </body>
 </html>

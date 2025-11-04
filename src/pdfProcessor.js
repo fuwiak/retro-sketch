@@ -3,83 +3,52 @@
 
 import { API_BASE_URL } from './config.js';
 
-// Static import of PDF.js for Vite build compatibility
-// PDF.js 4.x exports everything directly from the module
 let pdfjsLib = null;
 
-// Initialize PDF.js - try static import first
-try {
-  // Static import works with Vite build
-  const pdfjsModule = await import('pdfjs-dist');
-  
-  // PDF.js 4.x exports functions directly (getDocument, etc.)
-  if (pdfjsModule.getDocument && typeof pdfjsModule.getDocument === 'function') {
-    pdfjsLib = pdfjsModule;
-    
-    // Configure worker - use CDN worker matching the library version
-    if (typeof pdfjsLib.GlobalWorkerOptions !== 'undefined') {
-      const version = pdfjsLib.version || '4.10.38';
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.js`;
-      console.log('PDF.js initialized:', {
-        version: version,
-        workerSrc: pdfjsLib.GlobalWorkerOptions.workerSrc,
-        hasGetDocument: typeof pdfjsLib.getDocument === 'function'
-      });
-    }
-  } else if (pdfjsModule.default && typeof pdfjsModule.default.getDocument === 'function') {
-    pdfjsLib = pdfjsModule.default;
-    
-    if (typeof pdfjsLib.GlobalWorkerOptions !== 'undefined') {
-      const version = pdfjsLib.version || '4.10.38';
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.js`;
-      console.log('PDF.js initialized (default export):', {
-        version: version,
-        workerSrc: pdfjsLib.GlobalWorkerOptions.workerSrc
-      });
-    }
-  }
-} catch (importError) {
-  console.warn('PDF.js static import failed, will try dynamic import:', importError.message);
-}
-
-// Dynamically import PDF.js with retry mechanism (fallback)
-async function getPdfJs(maxRetries = 10, retryDelay = 100) {
-  if (pdfjsLib) {
-    return pdfjsLib;
-  }
-  
-  try {
-      
-      // Fallback: Try dynamic import (if static import failed)
-      if (!pdfjsLib) {
-        try {
-          const pdfjsModule = await import('pdfjs-dist');
-          if (pdfjsModule.getDocument && typeof pdfjsModule.getDocument === 'function') {
-            pdfjsLib = pdfjsModule;
-          } else if (pdfjsModule.default && typeof pdfjsModule.default.getDocument === 'function') {
-            pdfjsLib = pdfjsModule.default;
-          }
-          
-          if (pdfjsLib && typeof pdfjsLib.GlobalWorkerOptions !== 'undefined') {
-            const version = pdfjsLib.version || '4.10.38';
-            pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.js`;
-            console.log('PDF.js loaded via dynamic import:', {
-              version: version,
-              workerSrc: pdfjsLib.GlobalWorkerOptions.workerSrc
-            });
-          }
-        } catch (dynamicError) {
-          console.warn('PDF.js dynamic import also failed:', dynamicError.message);
+// Dynamically import PDF.js
+async function getPdfJs() {
+  if (!pdfjsLib) {
+    try {
+      // Try to use CDN version if available globally
+      if (typeof window !== 'undefined') {
+        // PDF.js 4.x from CDN - check multiple possible locations
+        // Try window.pdfjsLib first (set by index.html)
+        if (window.pdfjsLib && typeof window.pdfjsLib.getDocument === 'function') {
+          pdfjsLib = window.pdfjsLib;
+          console.log('PDF.js found: window.pdfjsLib');
+        }
+        // Try window.pdfjs (alternative name)
+        else if (window.pdfjs && typeof window.pdfjs.getDocument === 'function') {
+          pdfjsLib = window.pdfjs;
+          console.log('PDF.js found: window.pdfjs');
+        }
+        // Try global pdfjsLib variable (if script tag sets it)
+        else if (typeof pdfjsLib !== 'undefined' && typeof pdfjsLib.getDocument === 'function') {
+          pdfjsLib = pdfjsLib;
+          console.log('PDF.js found: global pdfjsLib');
+        }
+        // Try window['pdfjs-dist'] or other possible names
+        else if (window['pdfjs-dist'] && typeof window['pdfjs-dist'].getDocument === 'function') {
+          pdfjsLib = window['pdfjs-dist'];
+          console.log('PDF.js found: window["pdfjs-dist"]');
+        }
+        else {
+          console.warn('PDF.js not found. Available globals:', {
+            hasPdfjsLib: typeof window.pdfjsLib !== 'undefined',
+            hasPdfjs: typeof window.pdfjs !== 'undefined',
+            pdfjsLibType: typeof window.pdfjsLib,
+            pdfjsType: typeof window.pdfjs,
+            pdfjsLibKeys: window.pdfjsLib ? Object.keys(window.pdfjsLib).slice(0, 10) : null
+          });
         }
       }
-      
       if (!pdfjsLib || typeof pdfjsLib.getDocument !== 'function') {
-        console.error('PDF.js not available - all import methods failed');
-        throw new Error('PDF.js library is not available. Please ensure PDF.js is properly loaded.');
+        // Fallback: use object URL for iframe
+        return null;
       }
     } catch (e) {
-      console.error('Error checking PDF.js availability:', e);
-      throw e;
+      console.error('Error loading PDF.js:', e);
+      return null;
     }
   }
   return pdfjsLib;
@@ -123,8 +92,10 @@ export async function renderPdfPreview(file, canvas) {
       // Return data URL of rendered canvas
       return canvas.toDataURL('image/png');
     } else {
-      // PDF.js not available - throw error instead of fallback
-      throw new Error('PDF.js library is not available. Cannot render PDF preview.');
+      console.log('PDF.js not available, using iframe fallback');
+      // Fallback: create object URL for iframe preview
+      const url = URL.createObjectURL(file);
+      return url;
     }
   } catch (error) {
     console.error('Error rendering PDF preview:', error);
@@ -133,8 +104,14 @@ export async function renderPdfPreview(file, canvas) {
       stack: error.stack,
       name: error.name
     });
-    // Don't use iframe fallback - throw error instead
-    throw new Error(`Failed to render PDF: ${error.message}`);
+    // Fallback on error - use iframe
+    try {
+      const url = URL.createObjectURL(file);
+      return url;
+    } catch (fallbackError) {
+      console.error('Fallback also failed:', fallbackError);
+      throw new Error(`Failed to render PDF: ${error.message}`);
+    }
   }
 }
 
