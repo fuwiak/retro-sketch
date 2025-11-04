@@ -252,10 +252,12 @@ class CloudService:
             if isinstance(item, dict):
                 name = item.get('name', '')
                 path = item.get('path', '')
+                item_type = item.get('type') or item.get('kind', 'file')  # Get type from JSON or default to 'file'
                 # Construct download URL
                 download_url = item.get('download_url') or item.get('url') or f"{base_url}/{name}"
                 files.append({
                     'name': name,
+                    'type': 'folder' if item_type == 'folder' else 'file',
                     'path': path,
                     'url': download_url,
                     'download_url': download_url
