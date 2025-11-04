@@ -2,6 +2,8 @@
 // Provides rectangle and text selection functionality similar to react-pdf-selection
 // Built on top of PDF.js
 
+import * as pdfjsModule from 'pdfjs-dist';
+
 let pdfjsLib = null;
 let currentPdf = null;
 let currentPage = null;
@@ -12,8 +14,20 @@ let viewport = null;
  */
 async function getPdfJs() {
   if (!pdfjsLib) {
-    if (typeof window !== 'undefined') {
+    // Try npm package first
+    if (pdfjsModule && typeof pdfjsModule.getDocument === 'function') {
+      pdfjsLib = pdfjsModule;
+    } else if (pdfjsModule.default && typeof pdfjsModule.default.getDocument === 'function') {
+      pdfjsLib = pdfjsModule.default;
+    }
+    // Fallback to CDN
+    else if (typeof window !== 'undefined') {
       pdfjsLib = window.pdfjsLib || window.pdfjs || null;
+    }
+    
+    // Configure worker
+    if (pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '4.0.379'}/pdf.worker.min.js`;
     }
   }
   return pdfjsLib;

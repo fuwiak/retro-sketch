@@ -228,10 +228,20 @@ export async function processImageOCR(file, languages = ['rus', 'eng'], progress
  */
 async function pdfToImageData(file) {
   try {
-    // Try to use PDF.js if available
+    // Try to use PDF.js from npm package first
     let pdfjs = null;
-    if (typeof window !== 'undefined') {
-      pdfjs = window.pdfjsLib || window.pdfjs || null;
+    try {
+      const pdfjsModule = await import('pdfjs-dist');
+      if (pdfjsModule && typeof pdfjsModule.getDocument === 'function') {
+        pdfjs = pdfjsModule;
+      } else if (pdfjsModule.default && typeof pdfjsModule.default.getDocument === 'function') {
+        pdfjs = pdfjsModule.default;
+      }
+    } catch (importError) {
+      // Fallback to CDN
+      if (typeof window !== 'undefined') {
+        pdfjs = window.pdfjsLib || window.pdfjs || null;
+      }
     }
     
     if (pdfjs && typeof pdfjs.getDocument === 'function') {

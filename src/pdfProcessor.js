@@ -2,48 +2,54 @@
 // This module handles PDF file processing, OCR, and preview
 
 import { API_BASE_URL } from './config.js';
+import * as pdfjsModule from 'pdfjs-dist';
 
 let pdfjsLib = null;
 
-// Dynamically import PDF.js
+// Initialize PDF.js from npm package
 async function getPdfJs() {
   if (!pdfjsLib) {
     try {
-      // Try to use CDN version if available globally
-      if (typeof window !== 'undefined') {
-        // PDF.js 4.x from CDN - check multiple possible locations
-        // Try window.pdfjsLib first (set by index.html)
+      // Try to use npm package import first
+      if (pdfjsModule && typeof pdfjsModule.getDocument === 'function') {
+        pdfjsLib = pdfjsModule;
+        console.log('PDF.js loaded: from npm package (pdfjs-dist)');
+      } 
+      // Try default export
+      else if (pdfjsModule.default && typeof pdfjsModule.default.getDocument === 'function') {
+        pdfjsLib = pdfjsModule.default;
+        console.log('PDF.js loaded: from npm package default export');
+      }
+      // Fallback to CDN version if available globally
+      else if (typeof window !== 'undefined') {
         if (window.pdfjsLib && typeof window.pdfjsLib.getDocument === 'function') {
           pdfjsLib = window.pdfjsLib;
-          console.log('PDF.js found: window.pdfjsLib');
-        }
-        // Try window.pdfjs (alternative name)
-        else if (window.pdfjs && typeof window.pdfjs.getDocument === 'function') {
+          console.log('PDF.js loaded: from CDN (window.pdfjsLib)');
+        } else if (window.pdfjs && typeof window.pdfjs.getDocument === 'function') {
           pdfjsLib = window.pdfjs;
-          console.log('PDF.js found: window.pdfjs');
-        }
-        // Try global pdfjsLib variable (if script tag sets it)
-        else if (typeof pdfjsLib !== 'undefined' && typeof pdfjsLib.getDocument === 'function') {
-          pdfjsLib = pdfjsLib;
-          console.log('PDF.js found: global pdfjsLib');
-        }
-        // Try window['pdfjs-dist'] or other possible names
-        else if (window['pdfjs-dist'] && typeof window['pdfjs-dist'].getDocument === 'function') {
-          pdfjsLib = window['pdfjs-dist'];
-          console.log('PDF.js found: window["pdfjs-dist"]');
-        }
-        else {
-          console.warn('PDF.js not found. Available globals:', {
-            hasPdfjsLib: typeof window.pdfjsLib !== 'undefined',
-            hasPdfjs: typeof window.pdfjs !== 'undefined',
-            pdfjsLibType: typeof window.pdfjsLib,
-            pdfjsType: typeof window.pdfjs,
-            pdfjsLibKeys: window.pdfjsLib ? Object.keys(window.pdfjsLib).slice(0, 10) : null
-          });
+          console.log('PDF.js loaded: from CDN (window.pdfjs)');
         }
       }
+      
+      // Configure worker if PDF.js was loaded
+      if (pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
+        // Use CDN worker or try to use from npm package
+        try {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '4.0.379'}/pdf.worker.min.js`;
+          console.log('PDF.js worker configured from CDN');
+        } catch (workerError) {
+          console.warn('Could not configure PDF.js worker:', workerError);
+        }
+      }
+      
       if (!pdfjsLib || typeof pdfjsLib.getDocument !== 'function') {
-        // Fallback: use object URL for iframe
+        console.error('PDF.js not available. Checked:', {
+          hasPdfjsModule: !!pdfjsModule,
+          hasGetDocument: pdfjsModule && typeof pdfjsModule.getDocument === 'function',
+          hasDefault: pdfjsModule && !!pdfjsModule.default,
+          hasWindowPdfjsLib: typeof window !== 'undefined' && typeof window.pdfjsLib !== 'undefined',
+          moduleKeys: pdfjsModule ? Object.keys(pdfjsModule).slice(0, 10) : null
+        });
         return null;
       }
     } catch (e) {
