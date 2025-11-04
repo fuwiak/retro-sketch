@@ -843,25 +843,58 @@
       </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js" onload="initPdfJs()"></script>
     <script>
-      // Make PDF.js available globally and configure worker
-      (function() {
-        // Wait for PDF.js to load
+      // Initialize PDF.js when script loads
+      function initPdfJs() {
+        // PDF.js from CDN exposes itself as a global variable
+        // Try multiple ways to access it
+        let pdfLib = null;
+        
+        // Method 1: Direct access (if script exposes it)
         if (typeof pdfjsLib !== 'undefined') {
-          window.pdfjsLib = pdfjsLib;
+          pdfLib = pdfjsLib;
+        }
+        // Method 2: Check window object
+        else if (window.pdfjsLib) {
+          pdfLib = window.pdfjsLib;
+        }
+        // Method 3: Check if it's attached to window automatically
+        else if (window.pdfjs && typeof window.pdfjs.getDocument === 'function') {
+          pdfLib = window.pdfjs;
+        }
+        
+        if (pdfLib) {
+          // Make sure it's available on window
+          window.pdfjsLib = pdfLib;
+          
           // Configure worker source for CDN
-          if (typeof pdfjsLib.GlobalWorkerOptions !== 'undefined') {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+          if (typeof pdfLib.GlobalWorkerOptions !== 'undefined') {
+            pdfLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
           }
+          
           console.log('PDF.js initialized:', {
-            version: pdfjsLib.version || 'unknown',
-            hasGetDocument: typeof pdfjsLib.getDocument === 'function'
+            version: pdfLib.version || 'unknown',
+            hasGetDocument: typeof pdfLib.getDocument === 'function',
+            availableOnWindow: typeof window.pdfjsLib !== 'undefined'
           });
         } else {
-          console.warn('PDF.js not found after script load');
+          console.warn('PDF.js script loaded but library not found. Checking window object...');
+          console.log('window keys containing "pdf":', Object.keys(window).filter(k => k.toLowerCase().includes('pdf')));
+          // Try to find it after a delay (script might still be loading)
+          setTimeout(() => {
+            if (typeof pdfjsLib !== 'undefined') {
+              window.pdfjsLib = pdfjsLib;
+              console.log('PDF.js found after delay');
+            }
+          }, 100);
         }
-      })();
+      }
+      
+      // Also try to initialize immediately if script already loaded
+      if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(initPdfJs, 0);
+      }
     </script>
     <script type="module" src="/src/gui.js"></script>
   </body>

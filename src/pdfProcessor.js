@@ -5,33 +5,52 @@ import { API_BASE_URL } from './config.js';
 
 let pdfjsLib = null;
 
-// Dynamically import PDF.js
-async function getPdfJs() {
+// Dynamically import PDF.js with retry mechanism
+async function getPdfJs(maxRetries = 10, retryDelay = 100) {
   if (!pdfjsLib) {
     try {
       // Try to use CDN version if available globally
       if (typeof window !== 'undefined') {
-        // PDF.js from CDN might be available in multiple ways:
-        // 1. window.pdfjsLib (from CDN script tag)
-        // 2. window.pdfjs (alternative name)
-        // 3. pdfjsLib (global variable)
-        // 4. Check if PDF.js worker is available
-        pdfjsLib = window.pdfjsLib || window.pdfjs || (typeof pdfjsLib !== 'undefined' ? pdfjsLib : null);
-        
-        // If PDF.js is available but getDocument is not a function, try to configure it
-        if (pdfjsLib && typeof pdfjsLib.getDocument !== 'function') {
-          // Check if it's the worker or needs initialization
-          if (typeof pdfjsLib.GlobalWorkerOptions !== 'undefined') {
-            // Set worker source if needed (CDN usually handles this)
-            if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-              pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+        // Wait for PDF.js to be available (it loads asynchronously from CDN)
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          // PDF.js from CDN might be available in multiple ways:
+          // 1. window.pdfjsLib (from CDN script tag)
+          // 2. window.pdfjs (alternative name)
+          // 3. Check if script tag loaded it
+          const possibleLib = window.pdfjsLib || window.pdfjs || 
+                            (typeof pdfjsLib !== 'undefined' ? pdfjsLib : null);
+          
+          if (possibleLib && typeof possibleLib.getDocument === 'function') {
+            pdfjsLib = possibleLib;
+            
+            // Configure worker source if needed
+            if (typeof pdfjsLib.GlobalWorkerOptions !== 'undefined') {
+              if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+              }
             }
+            
+            console.log('PDF.js available:', {
+              version: pdfjsLib.version || 'unknown',
+              hasGetDocument: typeof pdfjsLib.getDocument === 'function',
+              hasGlobalWorkerOptions: typeof pdfjsLib.GlobalWorkerOptions !== 'undefined',
+              attempt: attempt + 1
+            });
+            break;
+          }
+          
+          // If not found, wait a bit and retry (PDF.js might still be loading)
+          if (attempt < maxRetries - 1) {
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
           }
         }
         
         // Verify that getDocument function exists
         if (!pdfjsLib || typeof pdfjsLib.getDocument !== 'function') {
-          console.warn('PDF.js loaded but getDocument not available. Available properties:', pdfjsLib ? Object.keys(pdfjsLib) : 'null');
+          console.warn('PDF.js not found after retries. Available window properties:', 
+            Object.keys(window).filter(k => k.toLowerCase().includes('pdf')));
+          console.warn('window.pdfjsLib:', window.pdfjsLib);
+          console.warn('window.pdfjs:', window.pdfjs);
           pdfjsLib = null;
         }
       }
@@ -40,12 +59,6 @@ async function getPdfJs() {
         console.warn('PDF.js not available, using iframe fallback');
         return null;
       }
-      
-      console.log('PDF.js available:', {
-        version: pdfjsLib.version || 'unknown',
-        hasGetDocument: typeof pdfjsLib.getDocument === 'function',
-        hasGlobalWorkerOptions: typeof pdfjsLib.GlobalWorkerOptions !== 'undefined'
-      });
     } catch (e) {
       console.error('Error checking PDF.js availability:', e);
       return null;
