@@ -33,12 +33,32 @@ async function getPdfJs() {
       
       // Configure worker if PDF.js was loaded
       if (pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
-        // Use CDN worker or try to use from npm package
+        // Use worker from npm package via Vite
+        // Import worker as a URL - Vite will bundle it and make it available
         try {
-          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '4.0.379'}/pdf.worker.min.js`;
-          console.log('PDF.js worker configured from CDN');
+          // Use Vite's ?worker import for proper bundling
+          const workerModule = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
+          pdfjsLib.GlobalWorkerOptions.workerSrc = workerModule.default || workerModule;
+          console.log('PDF.js worker configured from npm package (bundled by Vite)');
         } catch (workerError) {
-          console.warn('Could not configure PDF.js worker:', workerError);
+          console.warn('Failed to import worker from npm, trying alternative method:', workerError);
+          // Alternative: use direct path (works in production after build)
+          try {
+            // In production, Vite will have bundled the worker
+            pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+              'pdfjs-dist/build/pdf.worker.min.mjs',
+              import.meta.url
+            ).href;
+            console.log('PDF.js worker configured using URL constructor');
+          } catch (urlError) {
+            // Final fallback to CDN
+            try {
+              pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '4.0.379'}/pdf.worker.min.js`;
+              console.log('PDF.js worker fallback to CDN');
+            } catch (cdnError) {
+              console.warn('Could not configure PDF.js worker:', cdnError);
+            }
+          }
         }
       }
       

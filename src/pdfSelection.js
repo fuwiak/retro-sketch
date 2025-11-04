@@ -25,9 +25,31 @@ async function getPdfJs() {
       pdfjsLib = window.pdfjsLib || window.pdfjs || null;
     }
     
-    // Configure worker
+    // Configure worker (must be async)
     if (pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '4.0.379'}/pdf.worker.min.js`;
+      try {
+        // Use worker from npm package via Vite
+        const workerModule = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = workerModule.default || workerModule;
+        console.log('PDF.js worker configured from npm package');
+      } catch (workerError) {
+        // Fallback to URL constructor
+        try {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+            'pdfjs-dist/build/pdf.worker.min.mjs',
+            import.meta.url
+          ).href;
+          console.log('PDF.js worker configured using URL constructor');
+        } catch (urlError) {
+          // Final fallback to CDN
+          try {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '4.0.379'}/pdf.worker.min.js`;
+            console.log('PDF.js worker fallback to CDN');
+          } catch (cdnError) {
+            console.warn('Could not configure PDF.js worker:', cdnError);
+          }
+        }
+      }
     }
   }
   return pdfjsLib;
