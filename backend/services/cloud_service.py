@@ -287,12 +287,15 @@ class CloudService:
                 })
         return files
     
-    def _fetch_folder_files(self, folder_url: str, folder_name: str) -> List[Dict]:
-        """Fetch files from a subfolder (recursive)"""
-        files = []
+    def fetch_folder_files(self, folder_url: str, folder_name: str = "") -> List[Dict]:
+        """
+        Fetch files from a subfolder - LAZY: called on demand
+        Returns list of files (and subfolders) from this folder only
+        """
+        items = []
         try:
-            api_logger.debug(f"Fetching files from folder: {folder_url}")
-            response = self.session.get(folder_url, timeout=20)
+            api_logger.info(f"Fetching files from folder: {folder_url}")
+            response = self.session.get(folder_url, timeout=10)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -327,26 +330,40 @@ class CloudService:
                                         item_name = item.get('name', '')
                                         item_weblink = item.get('weblink', '')
                                         
-                                        # Only get files, not subfolders (for now)
-                                        if item_type == 'file' or (item_type != 'folder' and item_name):
-                                            if item_weblink:
-                                                download_url = f"https://cloud.mail.ru/public/{item_weblink}"
-                                            else:
-                                                download_url = f"{folder_url}/{item_name}"
-                                            
-                                            files.append({
+                                        # Build URL
+                                        if item_weblink:
+                                            item_url = f"https://cloud.mail.ru/public/{item_weblink}"
+                                        else:
+                                            item_url = f"{folder_url}/{item_name}"
+                                        
+                                        # Add folder or file
+                                        if item_type == 'folder':
+                                            items.append({
                                                 'name': item_name,
-                                                'path': folder_name,  # Store parent folder name
+                                                'type': 'folder',
+                                                'path': folder_name,
+                                                'url': item_url,
+                                                'download_url': item_url
+                                            })
+                                        elif item_type == 'file' or (item_type != 'folder' and item_name):
+                                            download_url = item_url
+                                            items.append({
+                                                'name': item_name,
+                                                'type': 'file',
+                                                'path': folder_name,
                                                 'url': download_url,
                                                 'download_url': download_url
                                             })
                                 break
-                            except:
+                            except Exception as e:
+                                api_logger.debug(f"Error parsing folder JSON: {str(e)}")
                                 pass
         except Exception as e:
-            api_logger.debug(f"Error fetching folder files: {str(e)}")
+            api_logger.error(f"Error fetching folder files: {str(e)}")
+            raise
         
-        return files
+        api_logger.info(f"Found {len(items)} items in folder {folder_name or folder_url}")
+        return items
     
     def download_file(self, url: str) -> bytes:
         """Download file from URL"""
