@@ -18,14 +18,15 @@ async function getPdfJs(maxRetries = 10, retryDelay = 100) {
             // PDF.js 4.x exports as default or named export
             const lib = pdfjsModule.default || pdfjsModule || pdfjsModule.pdfjsLib;
             if (lib && typeof lib.getDocument === 'function') {
-              // Configure worker
+              // Configure worker - use CDN worker for better compatibility
               if (typeof lib.GlobalWorkerOptions !== 'undefined') {
-                lib.GlobalWorkerOptions.workerSrc = new URL(
-                  'pdfjs-dist/build/pdf.worker.min.mjs',
-                  import.meta.url
-                ).toString();
+                // Use CDN worker instead of bundled one for better compatibility
+                lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
               }
-              console.log('PDF.js loaded from npm package (pdfjs-dist)');
+              console.log('PDF.js loaded from npm package (pdfjs-dist):', {
+                version: lib.version || 'unknown',
+                hasGetDocument: typeof lib.getDocument === 'function'
+              });
               return lib;
             }
           } catch (importError) {
