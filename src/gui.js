@@ -930,12 +930,17 @@ els.pdfFileInput.addEventListener("change", async (e) => {
   // Show preview
   try {
     const preview = await pdfProcessor.renderPdfPreview(file, els.pdfCanvas);
+    // renderPdfPreview should always return a data URL (canvas rendered)
     if (typeof preview === 'string' && preview.startsWith('data:')) {
-      // Image data URL
+      // Image data URL - show as image
       els.pdfPreview.innerHTML = `<img src="${preview}" style="max-width: 100%; height: auto;" />`;
-    } else if (typeof preview === 'string') {
-      // Object URL
-      els.pdfPreview.innerHTML = `<iframe src="${preview}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+    } else {
+      // Canvas was rendered directly, show it
+      els.pdfPreview.innerHTML = '';
+      els.pdfCanvas.style.display = 'block';
+      if (!els.pdfCanvas.parentElement || els.pdfCanvas.parentElement !== els.pdfPreview) {
+        els.pdfPreview.appendChild(els.pdfCanvas);
+      }
     }
     els.pdfPreview.classList.remove("hidden");
   } catch (error) {
@@ -1974,12 +1979,9 @@ async function handlePdfFile(file) {
     els.pdfPreview.classList.remove('hidden');
     els.togglePdf.textContent = '📄 Hide Preview';
     
-    // If renderPdfPreview returned a URL (fallback), use iframe
-    if (typeof preview === 'string' && !preview.startsWith('data:')) {
-      // Object URL - use iframe with PDF.js viewer or direct PDF
-      els.pdfPreview.innerHTML = `<iframe src="${preview}" style="width: 100%; height: 100%; border: none;" onerror="this.parentElement.innerHTML='<p style=\\'opacity: 0.6; text-align: center; padding: 20px;\\'>Failed to load PDF. Please try downloading the file.</p>'"></iframe>`;
-      els.pdfCanvas.style.display = 'none';
-    } else if (typeof preview === 'string' && preview.startsWith('data:')) {
+    // renderPdfPreview should always return a data URL (canvas rendered) or throw error
+    // No iframe fallback - we require PDF.js to work
+    if (typeof preview === 'string' && preview.startsWith('data:')) {
       // Image data URL - show as image (canvas was rendered successfully)
       els.pdfPreview.innerHTML = '';
       els.pdfCanvas.style.display = 'block';

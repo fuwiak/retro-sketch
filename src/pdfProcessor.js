@@ -30,7 +30,8 @@ async function getPdfJs(maxRetries = 10, retryDelay = 100) {
               return lib;
             }
           } catch (importError) {
-            console.debug('PDF.js npm import failed, trying CDN:', importError.message);
+            console.warn('PDF.js npm import failed, trying CDN:', importError.message);
+            console.warn('Import error details:', importError);
             return null;
           }
         })();
@@ -110,8 +111,8 @@ async function getPdfJs(maxRetries = 10, retryDelay = 100) {
       }
       
       if (!pdfjsLib) {
-        console.warn('PDF.js not available, using iframe fallback');
-        return null;
+        console.error('PDF.js not available - npm import and CDN both failed');
+        throw new Error('PDF.js library is not available. Please ensure PDF.js is properly loaded.');
       }
     } catch (e) {
       console.error('Error checking PDF.js availability:', e);
@@ -159,10 +160,8 @@ export async function renderPdfPreview(file, canvas) {
       // Return data URL of rendered canvas
       return canvas.toDataURL('image/png');
     } else {
-      console.log('PDF.js not available, using iframe fallback');
-      // Fallback: create object URL for iframe preview
-      const url = URL.createObjectURL(file);
-      return url;
+      // PDF.js not available - throw error instead of fallback
+      throw new Error('PDF.js library is not available. Cannot render PDF preview.');
     }
   } catch (error) {
     console.error('Error rendering PDF preview:', error);
@@ -171,14 +170,8 @@ export async function renderPdfPreview(file, canvas) {
       stack: error.stack,
       name: error.name
     });
-    // Fallback on error - use iframe
-    try {
-      const url = URL.createObjectURL(file);
-      return url;
-    } catch (fallbackError) {
-      console.error('Fallback also failed:', fallbackError);
-      throw new Error(`Failed to render PDF: ${error.message}`);
-    }
+    // Don't use iframe fallback - throw error instead
+    throw new Error(`Failed to render PDF: ${error.message}`);
   }
 }
 
