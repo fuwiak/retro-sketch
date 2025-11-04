@@ -14,9 +14,27 @@ async function getPdfJs(maxRetries = 10, retryDelay = 100) {
       if (!pdfjsImportPromise) {
         pdfjsImportPromise = (async () => {
           try {
+            // PDF.js 4.x uses ES modules, import the main module
             const pdfjsModule = await import('pdfjs-dist');
-            // PDF.js 4.x exports as default or named export
-            const lib = pdfjsModule.default || pdfjsModule || pdfjsModule.pdfjsLib;
+            
+            // PDF.js 4.x exports differently - check all possible exports
+            let lib = null;
+            
+            // Try different export patterns
+            if (pdfjsModule.getDocument && typeof pdfjsModule.getDocument === 'function') {
+              // Named export - entire module is the library
+              lib = pdfjsModule;
+            } else if (pdfjsModule.default && pdfjsModule.default.getDocument) {
+              // Default export
+              lib = pdfjsModule.default;
+            } else if (pdfjsModule.pdfjsLib && pdfjsModule.pdfjsLib.getDocument) {
+              // Named pdfjsLib export
+              lib = pdfjsModule.pdfjsLib;
+            } else if (typeof pdfjsModule === 'object' && pdfjsModule.getDocument) {
+              // Module itself
+              lib = pdfjsModule;
+            }
+            
             if (lib && typeof lib.getDocument === 'function') {
               // Configure worker - use CDN worker for better compatibility
               if (typeof lib.GlobalWorkerOptions !== 'undefined') {
@@ -25,9 +43,13 @@ async function getPdfJs(maxRetries = 10, retryDelay = 100) {
               }
               console.log('PDF.js loaded from npm package (pdfjs-dist):', {
                 version: lib.version || 'unknown',
-                hasGetDocument: typeof lib.getDocument === 'function'
+                hasGetDocument: typeof lib.getDocument === 'function',
+                moduleKeys: Object.keys(pdfjsModule)
               });
               return lib;
+            } else {
+              console.warn('PDF.js module loaded but getDocument not found. Module keys:', Object.keys(pdfjsModule));
+              return null;
             }
           } catch (importError) {
             console.warn('PDF.js npm import failed, trying CDN:', importError.message);
