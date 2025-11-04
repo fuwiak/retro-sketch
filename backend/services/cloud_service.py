@@ -19,14 +19,14 @@ class CloudService:
             'Upgrade-Insecure-Requests': '1'
         })
     
-    def parse_mailru_folder(self, url: str) -> Dict:
+    def parse_mailru_folder_structure(self, url: str) -> Dict:
         """
-        Parse Mail.ru Cloud public folder URL
-        Returns list of files with their download URLs
-        Simple approach: parse everything, pagination happens in API layer
+        Parse Mail.ru Cloud public folder URL - LAZY: only get structure (folders and file names)
+        Returns list of folders and file names WITHOUT fetching files from subfolders
+        This is fast and doesn't cause timeouts
         """
         try:
-            api_logger.info(f"Fetching Mail.ru Cloud folder: {url}")
+            api_logger.info(f"Fetching Mail.ru Cloud folder structure: {url}")
             
             # Extract folder hash from URL
             # Format: https://cloud.mail.ru/public/ZVeV/Mq5HoaFGX
@@ -115,20 +115,21 @@ class CloudService:
                                                 else:
                                                     item_url = f"{url}/{item_name}"
                                                 
-                                                # If it's a folder, fetch files from it
+                                                # LAZY: If it's a folder, just store it as folder (don't fetch files yet)
                                                 if item_type == 'folder':
-                                                    try:
-                                                        folder_files = self._fetch_folder_files(item_url, item_name)
-                                                        files.extend(folder_files)
-                                                        api_logger.debug(f"Fetched {len(folder_files)} files from folder {item_name}")
-                                                    except Exception as e:
-                                                        api_logger.warning(f"Error fetching folder {item_name}: {str(e)}")
-                                                        # Continue with other folders even if one fails
+                                                    files.append({
+                                                        'name': item_name,
+                                                        'type': 'folder',
+                                                        'path': '',
+                                                        'url': item_url,
+                                                        'download_url': item_url  # Folder URL for fetching files later
+                                                    })
                                                 # If it's a file, add it
                                                 elif item_type == 'file' or (item_type != 'folder' and item_name):
                                                     download_url = item_url
                                                     files.append({
                                                         'name': item_name,
+                                                        'type': 'file',
                                                         'path': '',
                                                         'url': download_url,
                                                         'download_url': download_url
@@ -235,8 +236,8 @@ class CloudService:
                         api_logger.debug(f"API endpoint {api_url} failed: {str(e)}")
                         continue
             
-            api_logger.info(f"Found {len(files)} files in folder")
-            return {'files': files, 'folder_url': url}
+            api_logger.info(f"Found {len(files)} items in folder structure (folders + files)")
+            return {'items': files, 'folder_url': url}
             
         except Exception as e:
             api_logger.error(f"Error parsing Mail.ru Cloud folder: {str(e)}")

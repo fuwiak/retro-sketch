@@ -253,51 +253,52 @@ class CloudFileRequest(BaseModel):
     url: str
     fileName: str
 
+class CloudFolderFilesRequest(BaseModel):
+    folder_url: str
+    folder_name: str = ""
+
 @app.post("/api/cloud/folder")
 async def get_cloud_folder(request: CloudFolderRequest):
-    """Get folder structure from Mail.ru Cloud with pagination"""
+    """Get folder structure from Mail.ru Cloud - LAZY: only structure, no recursive fetching"""
     log_api_request("POST", "/api/cloud/folder", {"url": request.url, "limit": request.limit, "offset": request.offset})
     
     try:
         import asyncio
         import concurrent.futures
         
-        # Simple approach: parse ALL files first, then paginate
-        # This is simpler and more reliable
+        # LAZY approach: parse only structure (folders and file names), no recursive fetching
         loop = asyncio.get_event_loop()
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             folder_data = await asyncio.wait_for(
                 loop.run_in_executor(
                     executor, 
-                    cloud_service.parse_mailru_folder, 
+                    cloud_service.parse_mailru_folder_structure, 
                     request.url
                 ),
-                timeout=20.0  # 20 seconds should be enough for most folders
+                timeout=10.0  # 10 seconds should be enough for structure only
             )
         
-        files = folder_data.get('files', [])
-        total_files = len(files)
+        items = folder_data.get('items', [])
+        total_items = len(items)
         
-        # Apply pagination AFTER parsing
-        paginated_files = files[request.offset:request.offset + request.limit]
-        has_more = (request.offset + request.limit) < total_files
+        # Apply pagination
+        paginated_items = items[request.offset:request.offset + request.limit]
+        has_more = (request.offset + request.limit) < total_items
         
         result = {
-            'files': paginated_files,
+            'items': paginated_items,
             'folder_url': folder_data.get('folder_url', request.url),
             'pagination': {
-                'total': total_files,
+                'total': total_items,
                 'limit': request.limit,
                 'offset': request.offset,
                 'has_more': has_more,
-                'returned': len(paginated_files)
+                'returned': len(paginated_items)
             }
         }
         
-        # Calculate time taken (simple - just log without timing for now)
         log_api_response("POST", "/api/cloud/folder", 200, 0.0)
-        api_logger.info(f"Folder parsed: {len(paginated_files)}/{total_files} files returned (has_more={has_more})")
-        api_logger.info(f"Successfully parsed folder: {len(paginated_files)}/{total_files} files returned (offset={request.offset})")
+        api_logger.info(f"Folder structure parsed: {len(paginated_items)}/{total_items} items returned (has_more={has_more})")
         return result
     except asyncio.TimeoutError:
         api_logger.error(f"Timeout parsing Mail.ru Cloud folder: {request.url}")
@@ -317,6 +318,40 @@ async def get_cloud_folder(request: CloudFolderRequest):
             status_code=500,
             detail=f"Failed to load folder: {str(e)}"
         )
+
+@app.post("/api/cloud/folder/files")
+async def get_folder_files(request: CloudFolderFilesRequest):
+    """Get files from a specific folder - LAZY: called on demand when user expands folder"""
+    log_api_request("POST", "/api/cloud/folder/files", {"folder_url": request.folder_url, "folder_name": request.folder_name})
+    
+    try:
+        import asyncio
+        import concurrent.futures
+        
+        loop = asyncio.get_event_loop()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            items = await asyncio.wait_for(
+                loop.run_in_executor(
+                    executor,
+                    cloud_service.fetch_folder_files,
+                    request.folder_url,
+                    request.folder_name
+                ),
+                timeout=10.0
+            )
+        
+        log_api_response("POST", "/api/cloud/folder/files", 200, 0.0)
+        api_logger.info(f"Folder files fetched: {len(items)} items from {request.folder_name or request.folder_url}")
+        return {'items': items, 'folder_url': request.folder_url}
+        
+    except asyncio.TimeoutError:
+        api_logger.error(f"Timeout fetching folder files: {request.folder_url}")
+        log_api_response("POST", "/api/cloud/folder/files", 504, 0.0)
+        raise HTTPException(status_code=504, detail="Request timeout")
+    except Exception as e:
+        api_logger.error(f"Error fetching folder files: {str(e)}")
+        log_api_response("POST", "/api/cloud/folder/files", 500, 0.0)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch folder files: {str(e)}")
 
 @app.post("/api/cloud/file")
 async def get_cloud_file(request: CloudFileRequest):
