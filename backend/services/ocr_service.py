@@ -289,19 +289,19 @@ PDF data (base64): {file_b64[:5000]}..."""
             processing_info["actual_time"] = actual_time
             processing_info["time_difference"] = actual_time - estimated_time
             
+            # Determine pages BEFORE logging
+            is_image = file_type.startswith("image/")
+            if is_image:
+                pages = 1
+            else:
+                pages = evaluation["file_stats"]["pages"]
+            
             ocr_logger.info(
                 f"OCR completed - Method: {processing_info['method']}, "
                 f"Time: {actual_time:.2f}s, "
                 f"Text length: {len(ocr_text)} chars, "
                 f"Pages: {pages}"
             )
-            
-            # Determine pages
-            is_image = file_type.startswith("image/")
-            if is_image:
-                pages = 1
-            else:
-                pages = evaluation["file_stats"]["pages"]
             
             # Log success
             log_ocr_result(
@@ -346,6 +346,13 @@ PDF data (base64): {file_b64[:5000]}..."""
                 actual_time = time.time() - start_time
                 processing_info["actual_time"] = actual_time
                 
+                # Determine pages for fallback
+                is_image = file_type.startswith("image/")
+                if is_image:
+                    pages = 1
+                else:
+                    pages = evaluation["file_stats"]["pages"]
+                
                 ocr_logger.info(f"Fallback succeeded - Method: {processing_info['method']}, Time: {actual_time:.2f}s")
                 
                 # Log fallback success
@@ -353,13 +360,13 @@ PDF data (base64): {file_b64[:5000]}..."""
                     method=processing_info["method"],
                     success=True,
                     time_taken=actual_time,
-                    pages=evaluation["file_stats"]["pages"]
+                    pages=pages
                 )
                 
                 return {
                     "text": ocr_text,
                     "file_type": "image" if is_image else "pdf",
-                    "pages": evaluation["file_stats"]["pages"],
+                    "pages": pages,
                     "metadata": {
                         "languages": languages,
                         "file_type": file_type,

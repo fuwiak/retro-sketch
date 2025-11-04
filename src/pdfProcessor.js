@@ -143,7 +143,13 @@ export async function processPdfWithOCR(file, languages = ['rus', 'eng'], progre
   } catch (error) {
     console.error('OCR processing error:', error);
     
-    // Fallback: try direct Groq if backend fails
+    // Don't fallback to direct Groq if backend error is due to missing API key
+    // This prevents infinite recursion and stack overflow
+    if (error.message && error.message.includes('Groq API key not configured')) {
+      throw new Error(`OCR processing failed: ${error.message}. Please configure GROQ_API_KEY in backend environment.`);
+    }
+    
+    // Fallback: try direct Groq if backend fails (only for non-config errors)
     if (progressCallback) {
       progressCallback(`Backend failed, trying direct Groq API...`);
     }
@@ -157,7 +163,7 @@ export async function processPdfWithOCR(file, languages = ['rus', 'eng'], progre
         return await processPdfOCR(file, languages, progressCallback);
       }
     } catch (fallbackError) {
-      throw new Error(`OCR processing failed: ${error.message}. Backend unavailable and Groq fallback also failed.`);
+      throw new Error(`OCR processing failed: ${error.message}. Backend unavailable and Groq fallback also failed: ${fallbackError.message}`);
     }
   }
 }
