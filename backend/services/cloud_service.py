@@ -174,6 +174,7 @@ class CloudService:
                         if file_name:
                             files.append({
                                 'name': file_name,
+                                'type': 'file',
                                 'url': file_url,
                                 'download_url': file_url,
                                 'path': ''
@@ -200,6 +201,7 @@ class CloudService:
                             
                             files.append({
                                 'name': text or href.split('/')[-1].split('?')[0],
+                                'type': 'file',
                                 'url': file_url,
                                 'download_url': file_url,
                                 'path': ''
@@ -267,6 +269,7 @@ class CloudService:
             if isinstance(item, dict):
                 name = item.get('name', '')
                 path = item.get('path', '')
+                item_type = item.get('type') or item.get('kind', 'file')  # Get type from API or default to 'file'
                 # Mail.ru Cloud API may return different structures
                 download_url = item.get('weblink') or item.get('download_url') or item.get('url')
                 if download_url and not download_url.startswith('http'):
@@ -275,6 +278,7 @@ class CloudService:
                     download_url = f"{base_url}/{name}"
                 files.append({
                     'name': name,
+                    'type': 'folder' if item_type == 'folder' else 'file',
                     'path': path,
                     'url': download_url,
                     'download_url': download_url
