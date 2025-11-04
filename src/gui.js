@@ -1452,7 +1452,7 @@ els.modalSearch.addEventListener("input", (e) => {
   if (val) {
     const regex = new RegExp(`(${val})`, 'gi');
     els.modalData.innerHTML = content.replace(regex, '<mark style="background: var(--ui-color); color: #000;">$1</mark>');
-} else {
+        } else {
     els.modalData.innerHTML = content;
   }
 });
@@ -1713,7 +1713,7 @@ function renderCloudFolder(data) {
       const fileUrl = item.dataset.url;
       const fileName = item.dataset.name;
       await loadFileFromCloud(fileUrl, fileName);
-      playClick(400);
+  playClick(400);
     });
   });
   
@@ -1767,15 +1767,15 @@ function renderCloudFolder(data) {
                     <div style="padding: 5px; opacity: 0.7;">Loading...</div>
                   </div>
                 </div>`;
-              } else {
+} else {
                 const icon = item.name.match(/\.(pdf|png|jpg|jpeg)$/i) ? 
                   (item.name.match(/\.pdf$/i) ? '📄' : '🖼️') : '📄';
                 filesHtml += `<div class="cloud-file-item" data-url="${item.url || item.download_url}" data-name="${item.name}" style="padding: 5px; cursor: pointer;">
                   ${icon} ${item.name}
                 </div>`;
               }
-            });
-          } else {
+    });
+  } else {
             filesHtml = '<div style="padding: 5px; opacity: 0.7;">No files</div>';
           }
           
@@ -1785,8 +1785,8 @@ function renderCloudFolder(data) {
           filesContainer.querySelectorAll('.cloud-file-item').forEach(item => {
             item.addEventListener('click', async () => {
               await loadFileFromCloud(item.dataset.url, item.dataset.name);
-              playClick(400);
-            });
+    playClick(400);
+  });
           });
           
           // Re-attach folder expand listeners recursively
@@ -1798,7 +1798,7 @@ function renderCloudFolder(data) {
           filesContainer.innerHTML = `<div style="padding: 5px; color: rgb(255, 100, 100);">❌ Error loading folder</div>`;
           console.error('Error loading folder files:', error);
         }
-      } else {
+} else {
         // Collapse
         expandIcon.textContent = '▶';
         expandIcon.style.transform = 'rotate(0deg)';
@@ -1948,13 +1948,6 @@ function renderImageOnCanvas(sourceCanvas) {
   els.pdfPreviewPlaceholder.style.display = 'none';
   els.pdfPreview.classList.remove('hidden');
   els.togglePdf.textContent = '📄 Hide Preview';
-  
-  // Store as current PDF file (for processing)
-  if (sourceCanvas.toBlob) {
-    sourceCanvas.toBlob((blob) => {
-      currentPdfFile = new File([blob], 'image.png', { type: 'image/png' });
-    }, 'image/png');
-  }
 }
 
 els.loadCloudFolderBtn.addEventListener("click", async () => {
