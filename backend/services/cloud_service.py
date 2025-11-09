@@ -420,7 +420,6 @@ class CloudService:
                     if '/public/' in url:
                         # Try Mail.ru Cloud download endpoint
                         # Format: https://cloud.mail.ru/public/[hash]/[filename] -> https://cloud.mail.ru/api/v2/file/download?weblink=[hash]&key=[timestamp]
-                        import re
                         match = re.search(r'/public/([^/]+)/([^/]+)$', url)
                         if match:
                             folder_hash = match.group(1)
