@@ -416,36 +416,25 @@ class CloudService:
                             urls = re.findall(r'https?://[^\s"\'<>]+\.(?:pdf|png|jpg|jpeg)', script.string, re.I)
                             download_links.extend(urls)
                     
-                    # Try alternative: add download=1 query parameter
-                    from urllib.parse import urlencode, urlparse, parse_qsl, urlunparse, quote
-                    parsed = urlparse(url)
-                    query_params = dict(parse_qsl(parsed.query))
-                    if 'download' not in query_params:
-                        query_params['download'] = '1'
-                        new_query = urlencode(query_params)
-                        download_url = urlunparse(parsed._replace(query=new_query))
-                        api_logger.info(f"Trying with download=1: {download_url}")
-                        alt_response = self.session.get(download_url, timeout=30, stream=True, allow_redirects=True)
-                        if alt_response.status_code == 200:
-                            alt_content = alt_response.content
-                            if len(alt_content) > 4 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
-                                api_logger.info("Successfully downloaded with download=1")
-                                return alt_content
-                    
-                    # Try alternative: use Mail.ru Cloud download API endpoint
+                    # Try alternative: use /download endpoint
                     if '/public/' in url:
-                        public_path = url.split('/public/', 1)[1]
-                        # Ensure path is URL-encoded but keep slashes
-                        encoded_path = quote(public_path, safe='/')
-                        api_download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={encoded_path}"
-                        api_logger.info(f"Trying API download URL: {api_download_url}")
-                        alt_response = self.session.get(api_download_url, timeout=30, stream=True, allow_redirects=True)
-                        if alt_response.status_code == 200:
-                            alt_content = alt_response.content
-                            if len(alt_content) > 4 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
-                                api_logger.info("Successfully downloaded using API endpoint")
-                                return alt_content
- 
+                        # Try Mail.ru Cloud download endpoint
+                        # Format: https://cloud.mail.ru/public/[hash]/[filename] -> https://cloud.mail.ru/api/v2/file/download?weblink=[hash]&key=[timestamp]
+                        match = re.search(r'/public/([^/]+)/([^/]+)$', url)
+                        if match:
+                            folder_hash = match.group(1)
+                            filename = match.group(2)
+                            # Try direct download endpoint
+                            download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={folder_hash}/{filename}"
+                            api_logger.info(f"Trying alternative download URL: {download_url}")
+                            alt_response = self.session.get(download_url, timeout=30, stream=True, allow_redirects=True)
+                            if alt_response.status_code == 200:
+                                alt_content = alt_response.content
+                                # Check if it's actually a file
+                                if len(alt_content) > 4 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
+                                    api_logger.info(f"Successfully downloaded using alternative URL")
+                                    return alt_content
+                    
                     # If we found download links, try the first one
                     if download_links:
                         api_logger.info(f"Found {len(download_links)} potential download links, trying first: {download_links[0]}")
