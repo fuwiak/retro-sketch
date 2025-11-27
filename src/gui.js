@@ -94,6 +94,7 @@ let rectangleSelection = null;
 
 let userSettings = {
   humEnabled: true,
+  soundsEnabled: true,
   color: "rgb(255, 0, 0)",
   ocrLanguage: "rus+eng",
   autoTranslate: true,
@@ -105,6 +106,7 @@ let userSettings = {
 
 // ========== AUDIO ==========
 function playClick(pitch = 440) {
+  if (!userSettings.soundsEnabled) return;
   const ctx = new AudioContext();
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -118,6 +120,7 @@ function playClick(pitch = 440) {
 }
 
 function playTeleportFX() {
+  if (!userSettings.soundsEnabled) return;
   const ctx = new AudioContext();
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -2148,6 +2151,9 @@ settingsBtn.addEventListener("click", () => {
   const humToggle = document.getElementById("humToggle");
   if (humToggle) humToggle.checked = userSettings.humEnabled;
   
+  const soundsToggle = document.getElementById("soundsToggle");
+  if (soundsToggle) soundsToggle.checked = userSettings.soundsEnabled;
+  
   const autoTranslate = document.getElementById("autoTranslate");
   if (autoTranslate) autoTranslate.checked = userSettings.autoTranslate;
   
@@ -2177,6 +2183,7 @@ cancelSettings.addEventListener("click", () => {
 saveSettings.addEventListener("click", () => {
   userSettings.color = els.colorPicker.value;
   userSettings.humEnabled = document.getElementById("humToggle")?.checked ?? true;
+  userSettings.soundsEnabled = document.getElementById("soundsToggle")?.checked ?? true;
   userSettings.ocrLanguage = document.getElementById("ocrLanguage")?.value || "rus+eng";
   userSettings.autoTranslate = document.getElementById("autoTranslate")?.checked ?? true;
   userSettings.findSteelEquivalents = document.getElementById("findSteelEquivalents")?.checked ?? true;
