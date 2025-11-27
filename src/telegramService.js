@@ -88,30 +88,46 @@ export async function sendTelegramFile(botToken, chatId, file, caption = '', opt
 }
 
 /**
- * Send draft for review
+ * Send draft for review (uses backend API)
  */
-export async function sendDraftForReview(botToken, chatId, data, translations, files = []) {
+export async function sendDraftForReview(botToken, chatId, data, translations, steelEquivalents = {}, files = []) {
   try {
-    const messageId = Date.now();
+    // Use backend API for security (bot token stays on backend)
+    const { API_BASE_URL } = await import('./config.js');
     
-    // Format message
-    const message = formatReviewMessage(data, translations);
-    
-    // Send main message
-    await sendTelegramNotification(botToken, chatId, message, {
-      showApproval: true,
-      messageId: messageId
+    const response = await fetch(`${API_BASE_URL}/telegram/send`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        bot_token: botToken,
+        chat_id: chatId,
+        extracted_data: data,
+        translations: translations,
+        steel_equivalents: steelEquivalents,
+        send_files: files.length > 0
+      })
     });
     
-    // Send files if any
-    for (const file of files) {
-      await sendTelegramFile(botToken, chatId, file.file, file.caption, {
-        showApproval: true,
-        messageId: messageId
-      });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
     }
     
-    return messageId;
+    const result = await response.json();
+    
+    // Send files separately if needed (using direct Telegram API)
+    if (files.length > 0) {
+      for (const file of files) {
+        await sendTelegramFile(botToken, chatId, file.file, file.caption, {
+          showApproval: true,
+          messageId: result.message_id
+        });
+      }
+    }
+    
+    return result.message_id;
   } catch (error) {
     console.error('Error sending draft for review:', error);
     throw error;

@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict
 import os
 import time
 from pathlib import Path
@@ -19,6 +19,7 @@ from services.ocr_service import OCRService
 from services.translation_service import TranslationService
 from services.export_service import ExportService
 from services.cloud_service import CloudService
+from services.telegram_service import TelegramService
 from services.logger import api_logger, log_api_request, log_api_response
 
 # Load environment variables
@@ -44,6 +45,7 @@ ocr_service = OCRService()
 translation_service = TranslationService()
 export_service = ExportService()
 cloud_service = CloudService()
+telegram_service = TelegramService()
 
 # Frontend static files configuration
 # Check if frontend dist directory exists (for Railway deployment)
@@ -419,6 +421,134 @@ async def export_pdf(
         raise HTTPException(
             status_code=500,
             detail=f"PDF export failed: {str(e)}"
+        )
+
+
+# ========== TELEGRAM ENDPOINTS ==========
+
+class TelegramSendRequest(BaseModel):
+    bot_token: str
+    chat_id: str
+    extracted_data: Dict
+    translations: Dict
+    steel_equivalents: Optional[Dict] = {}
+    send_files: Optional[bool] = False
+
+class TelegramWebhookRequest(BaseModel):
+    update_id: int
+    callback_query: Optional[Dict] = None
+    message: Optional[Dict] = None
+
+@app.post("/api/telegram/send")
+async def send_telegram_notification(request: TelegramSendRequest):
+    """Send draft for review to Telegram"""
+    log_api_request("POST", "/api/telegram/send", {"chat_id": request.chat_id})
+    
+    try:
+        # Format message
+        message = telegram_service.format_review_message(
+            request.extracted_data,
+            request.translations,
+            request.steel_equivalents
+        )
+        
+        # Generate unique message ID
+        import time
+        message_id = str(int(time.time() * 1000))
+        
+        # Send message with approval buttons
+        result = telegram_service.send_message(
+            bot_token=request.bot_token,
+            chat_id=request.chat_id,
+            message=message,
+            show_approval=True,
+            message_id=message_id
+        )
+        
+        log_api_response("POST", "/api/telegram/send", 200, 0.0)
+        api_logger.info(f"Telegram notification sent to chat {request.chat_id}")
+        
+        return {
+            "success": True,
+            "message_id": message_id,
+            "telegram_message_id": result.get("result", {}).get("message_id"),
+            "chat_id": request.chat_id
+        }
+    except Exception as e:
+        api_logger.error(f"Error sending Telegram notification: {str(e)}")
+        log_api_response("POST", "/api/telegram/send", 500, 0.0)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to send Telegram notification: {str(e)}"
+        )
+
+@app.post("/api/telegram/webhook")
+async def handle_telegram_webhook(request: TelegramWebhookRequest):
+    """Handle Telegram webhook callbacks (button clicks)"""
+    log_api_request("POST", "/api/telegram/webhook", {"update_id": request.update_id})
+    
+    try:
+        # Handle callback query (button click)
+        if request.callback_query:
+            callback_query = request.callback_query
+            callback_id = callback_query.get("id")
+            callback_data = callback_query.get("data", "")
+            message = callback_query.get("message", {})
+            chat_id = message.get("chat", {}).get("id")
+            message_id = message.get("message_id")
+            bot_token = callback_query.get("from", {}).get("id")  # This would need to be passed differently
+            
+            # Extract action and message ID from callback_data
+            if callback_data.startswith("approve_"):
+                action = "approve"
+                msg_id = callback_data.replace("approve_", "")
+                
+                # Answer callback query
+                # Note: In production, bot_token should be retrieved from database/storage
+                # For now, we'll just log the action
+                api_logger.info(f"Approval received for message {msg_id} in chat {chat_id}")
+                
+                # Update message to show approval
+                # In production, you'd need to store bot_token with the message_id
+                # For now, we'll return success
+                
+                log_api_response("POST", "/api/telegram/webhook", 200, 0.0)
+                return {
+                    "success": True,
+                    "action": "approve",
+                    "message_id": msg_id,
+                    "chat_id": chat_id
+                }
+                
+            elif callback_data.startswith("reject_"):
+                action = "reject"
+                msg_id = callback_data.replace("reject_", "")
+                
+                api_logger.info(f"Rejection received for message {msg_id} in chat {chat_id}")
+                
+                log_api_response("POST", "/api/telegram/webhook", 200, 0.0)
+                return {
+                    "success": True,
+                    "action": "reject",
+                    "message_id": msg_id,
+                    "chat_id": chat_id
+                }
+        
+        # Handle regular message
+        if request.message:
+            api_logger.info(f"Regular message received: {request.message.get('text', 'N/A')}")
+            log_api_response("POST", "/api/telegram/webhook", 200, 0.0)
+            return {"success": True, "type": "message"}
+        
+        log_api_response("POST", "/api/telegram/webhook", 200, 0.0)
+        return {"success": True, "type": "unknown"}
+        
+    except Exception as e:
+        api_logger.error(f"Error handling Telegram webhook: {str(e)}")
+        log_api_response("POST", "/api/telegram/webhook", 500, 0.0)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to handle webhook: {str(e)}"
         )
 
 

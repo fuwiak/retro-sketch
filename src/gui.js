@@ -1130,6 +1130,10 @@ els.processBtn.addEventListener("click", async () => {
     
     els.status.textContent = "✅ Processing complete";
     log("✅ PDF processing completed successfully");
+    
+    // Step 7: Send to Telegram if configured
+    await sendToTelegramIfConfigured();
+    
     playTeleportFX();
     
   } catch (error) {
@@ -1398,7 +1402,7 @@ async function sendToTelegramIfConfigured() {
   
   try {
     els.status.textContent = "⏳ Sending to Telegram...";
-    const messageId = await telegramService.sendDraftForReview(botToken, chatId, extractedData, translatedData);
+    const messageId = await telegramService.sendDraftForReview(botToken, chatId, extractedData, translatedData, steelEquivData);
     log(`📱 Draft sent to Telegram (message ID: ${messageId})`);
     
     // Add to history
