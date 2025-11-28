@@ -300,11 +300,12 @@ class OCRService:
                         openrouter_start = time.time()
                         file_b64 = base64.b64encode(file_content).decode("utf-8")
                         
-                        # Используем быстрые модели для изображений
+                        # Используем быструю модель для изображений (только одну, без всех fallback для ускорения)
+                        ocr_logger.info("   Используем быструю модель qwen/qwen2.5-vl-32b-instruct для изображения")
                         ocr_text = await self.openrouter_service.extract_text_from_image(
                             image_base64=file_b64,
                             languages=languages,
-                            model="qwen/qwen2.5-vl-32b-instruct"  # Быстрая модель для изображений
+                            model="qwen/qwen2.5-vl-32b-instruct"  # Быстрая модель для изображений, без fallback
                         )
                         
                         openrouter_time = time.time() - openrouter_start

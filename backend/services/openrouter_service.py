@@ -457,16 +457,28 @@ class OpenRouterService:
         # Use provided model or default
         model_to_use = model or DEFAULT_VISION_MODEL
         
-        # СНАЧАЛА пробуем выбранную пользователем модель
-        models_to_try = [model_to_use]
-        api_logger.info(f"🎯 Приоритет: используем выбранную модель для извлечения текста: {model_to_use}")
+        # Для ускорения: если указана конкретная модель, используем только её (без fallback)
+        # Это особенно важно для изображений PNG/JPG
+        use_fallback = model is None  # Fallback только если модель не указана явно
         
-        # Затем добавляем fallback модели из DETECTION_FALLBACKS (кроме уже добавленной)
-        for fallback in self.detection_fallbacks:
-            if fallback["provider"] == "openrouter":
-                model_name = fallback["model"]
-                if model_name != model_to_use:  # Не добавляем, если уже есть
-                    models_to_try.append(model_name)
+        if use_fallback:
+            # СНАЧАЛА пробуем выбранную пользователем модель
+            models_to_try = [model_to_use]
+            api_logger.info(f"🎯 Приоритет: используем выбранную модель для извлечения текста: {model_to_use}")
+            
+            # Затем добавляем fallback модели из DETECTION_FALLBACKS (кроме уже добавленной)
+            for fallback in self.detection_fallbacks:
+                if fallback["provider"] == "openrouter":
+                    model_name = fallback["model"]
+                    if model_name != model_to_use:  # Не добавляем, если уже есть
+                        models_to_try.append(model_name)
+            
+            api_logger.info(f"🔄 Начинаем извлечение текста - будет испробовано {len(models_to_try)} моделей")
+            api_logger.info(f"   Первая попытка: {models_to_try[0]}")
+        else:
+            # Используем только указанную модель (быстро для изображений)
+            models_to_try = [model_to_use]
+            api_logger.info(f"⚡ Используем только указанную модель для ускорения: {model_to_use} (без fallback)")
         
         lang_names = {
             "rus": "Russian",
@@ -477,9 +489,6 @@ class OpenRouterService:
             "english": "English"
         }
         lang_list = ", ".join([lang_names.get(lang.lower(), lang) for lang in languages])
-        
-        api_logger.info(f"🔄 Начинаем извлечение текста - будет испробовано {len(models_to_try)} моделей")
-        api_logger.info(f"   Первая попытка: {models_to_try[0]}")
         
         for idx, model_name in enumerate(models_to_try, 1):
             try:
