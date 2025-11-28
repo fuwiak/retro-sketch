@@ -208,10 +208,17 @@ export async function processPdfWithOCR(file, languages = ['rus'], progressCallb
       progressCallback(`Sending to backend OCR service...`);
     }
     
+    // Увеличенный таймаут для OCR обработки (может занять до 5 минут для больших PDF)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 минут
+    
     const response = await fetch(`${API_BASE_URL}/ocr/process`, {
       method: 'POST',
-      body: formData
+      body: formData,
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));

@@ -317,6 +317,10 @@ els.resetPdfBtn.addEventListener("click", () => {
   els.polygonCanvas.width = 0;
   els.polygonCanvas.height = 0;
   els.polygonCanvas.style.display = 'none';
+  
+  // Очищаем preview PDF
+  els.pdfPreview.innerHTML = '';
+  els.pdfPreview.classList.add('hidden');
   els.pdfPreviewPlaceholder.style.display = 'block';
   els.pdfPreviewPlaceholder.textContent = 'PDF preview will appear here';
   els.enableCropBtn.style.display = 'none';
