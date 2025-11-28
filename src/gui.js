@@ -2152,6 +2152,7 @@ const settingsOverlay = document.getElementById("settingsOverlay");
 const settingsBtn = document.getElementById("settingsBtn");
 const saveSettings = document.getElementById("saveSettings");
 const cancelSettings = document.getElementById("cancelSettings");
+const resetSettings = document.getElementById("resetSettings");
 
 settingsBtn.addEventListener("click", () => {
   const ocrLanguage = document.getElementById("ocrLanguage");
@@ -2209,6 +2210,48 @@ saveSettings.addEventListener("click", () => {
   settingsOverlay.classList.add("hidden");
   log("💾 Settings saved");
   playTeleportFX();
+});
+
+// Кнопка сброса настроек к умолчанию
+resetSettings.addEventListener("click", () => {
+  // Значения по умолчанию
+  const defaultSettings = {
+    humEnabled: true,
+    soundsEnabled: true,
+    color: "rgb(255, 0, 0)",
+    ocrLanguage: "rus",
+    autoTranslate: true,
+    findSteelEquivalents: true,
+    exportDocx: true,
+    exportXlsx: true,
+    exportPdf: true,
+    ocrMethod: "auto",
+    ocrQuality: "balanced"
+  };
+  
+  // Применяем значения по умолчанию к userSettings
+  Object.assign(userSettings, defaultSettings);
+  
+  // Обновляем UI элементы в форме настроек
+  els.colorPicker.value = defaultSettings.color;
+  document.getElementById("humToggle").checked = defaultSettings.humEnabled;
+  document.getElementById("soundsToggle").checked = defaultSettings.soundsEnabled;
+  document.getElementById("ocrLanguage").value = defaultSettings.ocrLanguage;
+  document.getElementById("ocrMethod").value = defaultSettings.ocrMethod;
+  document.getElementById("ocrQuality").value = defaultSettings.ocrQuality;
+  document.getElementById("autoTranslate").checked = defaultSettings.autoTranslate;
+  document.getElementById("findSteelEquivalents").checked = defaultSettings.findSteelEquivalents;
+  document.getElementById("exportDocx").checked = defaultSettings.exportDocx;
+  document.getElementById("exportXlsx").checked = defaultSettings.exportXlsx;
+  document.getElementById("exportPdf").checked = defaultSettings.exportPdf;
+  
+  // Применяем изменения сразу (как будто нажали Save)
+  document.documentElement.style.setProperty("--ui-color", defaultSettings.color);
+  if (defaultSettings.humEnabled) startHum();
+  else stopHum();
+  
+  log("🔄 Настройки сброшены к умолчанию");
+  playClick(400);
 });
 
 settingsOverlay.addEventListener("click", (e) => {
