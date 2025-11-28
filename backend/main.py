@@ -845,20 +845,9 @@ async def get_cloud_file(request: CloudFileRequest):
         log_api_response("POST", "/api/cloud/file", 200, 0.0)
         api_logger.info(f"File downloaded: {request.fileName} ({len(file_content)} bytes)")
         
-        # Handle Unicode filenames properly (RFC 5987)
-        import urllib.parse
-        # Encode filename for Content-Disposition header
-        # Use ASCII fallback and RFC 5987 encoding for Unicode
-        safe_filename = request.fileName.encode('ascii', 'ignore').decode('ascii')
-        if safe_filename != request.fileName:
-            # Contains non-ASCII characters, use RFC 5987 encoding
-            encoded_filename = urllib.parse.quote(request.fileName, safe='')
-            content_disposition = f"attachment; filename=\"{safe_filename}\"; filename*=UTF-8''{encoded_filename}"
-        else:
-            content_disposition = f'attachment; filename="{request.fileName}"'
-        
         # Определяем MIME тип на основе расширения файла
         import mimetypes
+        import urllib.parse
         mime_type, _ = mimetypes.guess_type(request.fileName)
         if not mime_type:
             # Fallback для известных типов
@@ -870,6 +859,22 @@ async def get_cloud_file(request: CloudFileRequest):
                 mime_type = 'application/pdf'
             else:
                 mime_type = "application/octet-stream"
+        
+        # Handle Unicode filenames properly (RFC 5987)
+        # Для изображений используем 'inline' вместо 'attachment', чтобы они отображались в браузере
+        disposition_type = 'inline' if mime_type.startswith('image/') else 'attachment'
+        
+        # Encode filename for Content-Disposition header
+        # Use ASCII fallback and RFC 5987 encoding for Unicode
+        safe_filename = request.fileName.encode('ascii', 'ignore').decode('ascii')
+        if safe_filename != request.fileName:
+            # Contains non-ASCII characters, use RFC 5987 encoding
+            encoded_filename = urllib.parse.quote(request.fileName, safe='')
+            content_disposition = f'{disposition_type}; filename="{safe_filename}"; filename*=UTF-8\'\'{encoded_filename}'
+        else:
+            content_disposition = f'{disposition_type}; filename="{request.fileName}"'
+        
+        api_logger.info(f"Returning file with MIME type: {mime_type}, Content-Disposition: {content_disposition}")
         
         return Response(
             content=file_content,
