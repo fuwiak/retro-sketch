@@ -385,20 +385,52 @@ class CloudService:
         try:
             api_logger.info(f"Downloading file: {url}")
             
-            # Если URL уже является API endpoint, используем его напрямую
+            # Если URL уже является API endpoint, пробуем его, но если 403 - fallback на публичный URL
             if '/api/v2/file/download' in url:
-                api_logger.info("URL is already an API endpoint, using it directly")
-                response = self.session.get(url, timeout=30, stream=True, allow_redirects=True)
-                response.raise_for_status()
-                content = response.content
-                
-                # Проверяем, что это файл, а не HTML
-                if len(content) > 4:
-                    first_bytes = content[:4]
-                    if not (first_bytes[0:2] == b'<!' or b'<html' in content[:100].lower()):
-                        return content
+                api_logger.info("URL is already an API endpoint, trying it directly")
+                try:
+                    # Добавляем дополнительные заголовки для Mail.ru Cloud API
+                    headers = {
+                        'Referer': 'https://cloud.mail.ru/',
+                        'Origin': 'https://cloud.mail.ru'
+                    }
+                    response = self.session.get(url, timeout=30, stream=True, allow_redirects=True, headers=headers)
+                    response.raise_for_status()
+                    content = response.content
+                    
+                    # Проверяем, что это файл, а не HTML
+                    if len(content) > 4:
+                        first_bytes = content[:4]
+                        if not (first_bytes[0:2] == b'<!' or b'<html' in content[:100].lower()):
+                            api_logger.info("Successfully downloaded via API endpoint")
+                            return content
+                        else:
+                            api_logger.warning("API endpoint returned HTML instead of file")
+                except requests.exceptions.HTTPError as e:
+                    if e.response.status_code == 403:
+                        api_logger.warning(f"API endpoint returned 403 Forbidden, trying public URL fallback")
+                        # Извлекаем weblink и пробуем публичный URL
+                        import re
+                        weblink_match = re.search(r'weblink=([^&]+)', url)
+                        if weblink_match:
+                            weblink = weblink_match.group(1)
+                            # Пробуем публичный URL
+                            public_url = f"https://cloud.mail.ru/public/{weblink}"
+                            api_logger.info(f"Trying public URL fallback: {public_url}")
+                            # Продолжим обработку как обычный URL ниже
+                            url = public_url
                     else:
-                        api_logger.warning("API endpoint returned HTML instead of file")
+                        raise
+                except Exception as e:
+                    api_logger.warning(f"API endpoint failed: {str(e)}, trying public URL fallback")
+                    # Извлекаем weblink и пробуем публичный URL
+                    import re
+                    weblink_match = re.search(r'weblink=([^&]+)', url)
+                    if weblink_match:
+                        weblink = weblink_match.group(1)
+                        public_url = f"https://cloud.mail.ru/public/{weblink}"
+                        api_logger.info(f"Trying public URL fallback: {public_url}")
+                        url = public_url
             
             # Обычная загрузка через URL
             response = self.session.get(url, timeout=30, stream=True, allow_redirects=True)
