@@ -126,13 +126,19 @@ class CloudService:
                                                     })
                                                 # If it's a file, add it
                                                 elif item_type == 'file' or (item_type != 'folder' and item_name):
-                                                    download_url = item_url
+                                                    # Для файлов используем API endpoint для прямого скачивания
+                                                    if item_weblink:
+                                                        # Используем API endpoint с weblink для прямого скачивания
+                                                        download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={item_weblink}"
+                                                    else:
+                                                        download_url = item_url
                                                     files.append({
                                                         'name': item_name,
                                                         'type': 'file',
                                                         'path': '',
                                                         'url': download_url,
-                                                        'download_url': download_url
+                                                        'download_url': download_url,
+                                                        'weblink': item_weblink  # Сохраняем weblink для использования
                                                     })
                             except Exception as e:
                                 api_logger.debug(f"Error parsing list array: {str(e)}")
@@ -346,13 +352,22 @@ class CloudService:
                                                 'download_url': item_url
                                             })
                                         elif item_type == 'file' or (item_type != 'folder' and item_name):
-                                            download_url = item_url
+                                            # Для файлов используем weblink для прямого скачивания
+                                            # Mail.ru Cloud использует формат: https://cloud.mail.ru/api/v2/file/download?weblink={weblink}
+                                            if item_weblink:
+                                                # Используем weblink напрямую - это хеш файла для API
+                                                download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={item_weblink}"
+                                            else:
+                                                # Fallback на публичную ссылку
+                                                download_url = item_url
+                                            
                                             items.append({
                                                 'name': item_name,
                                                 'type': 'file',
                                                 'path': folder_name,
                                                 'url': download_url,
-                                                'download_url': download_url
+                                                'download_url': download_url,
+                                                'weblink': item_weblink  # Сохраняем weblink для использования
                                             })
                                 break
                             except Exception as e:
