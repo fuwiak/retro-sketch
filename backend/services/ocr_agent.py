@@ -150,6 +150,80 @@ class OCRSelectionAgent:
             ocr_logger.error(f"❌ Ошибка при определении типа PDF: {e}")
             return PDFType.UNKNOWN
     
+    async def detect_text_type(self, file_content: bytes, file_type: str) -> TextType:
+        """
+        Определяет тип текста (печатный/рукописный) используя AI модель через OpenRouter
+        Анализирует изображение для определения, является ли текст печатным или рукописным
+        """
+        try:
+            # Проверяем, что это изображение или PDF
+            is_image = file_type.startswith("image/")
+            
+            if not is_image:
+                # Для PDF конвертируем первую страницу в изображение
+                if not self.pdf2image_available:
+                    return TextType.UNKNOWN
+                
+                try:
+                    images = convert_from_bytes(file_content, dpi=300, first_page=1, last_page=1)
+                    if not images:
+                        return TextType.UNKNOWN
+                    image = images[0]
+                except:
+                    return TextType.UNKNOWN
+            else:
+                # Для изображений открываем напрямую
+                if not TESSERACT_AVAILABLE:
+                    return TextType.UNKNOWN
+                image = Image.open(io.BytesIO(file_content))
+            
+            # Конвертируем изображение в base64 для отправки в AI
+            img_buffer = io.BytesIO()
+            image.save(img_buffer, format='PNG')
+            img_buffer.seek(0)
+            image_base64 = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
+            
+            # Используем OpenRouter для определения типа текста
+            if self.openrouter_service and self.openrouter_service.is_available():
+                try:
+                    prompt = """Проанализируй это изображение технического чертежа или документа.
+                    
+Определи тип текста:
+- "printed" - если текст печатный (машинописный, напечатанный)
+- "handwritten" - если текст рукописный (написанный от руки)
+- "mixed" - если есть и печатный, и рукописный текст
+
+Верни ТОЛЬКО одно слово: printed, handwritten или mixed. Без объяснений."""
+
+                    # Используем быструю модель для определения типа
+                    result_text = await self.openrouter_service.extract_text_from_image(
+                        image_base64=image_base64,
+                        languages=["rus", "eng"],
+                        model="qwen/qwen2.5-vl-32b-instruct"  # Быстрая модель для анализа
+                    )
+                    
+                    if result_text:
+                        result_lower = result_text.strip().lower()
+                        if "handwritten" in result_lower or "рукописн" in result_lower:
+                            ocr_logger.info("✍️ Тип текста: РУКОПИСНЫЙ")
+                            return TextType.HANDWRITTEN
+                        elif "mixed" in result_lower or "смешан" in result_lower:
+                            ocr_logger.info("✍️ Тип текста: СМЕШАННЫЙ (печатный + рукописный)")
+                            return TextType.MIXED
+                        else:
+                            ocr_logger.info("✍️ Тип текста: ПЕЧАТНЫЙ")
+                            return TextType.PRINTED
+                except Exception as e:
+                    ocr_logger.warning(f"⚠️ Ошибка при определении типа текста через AI: {e}")
+            
+            # Fallback: по умолчанию считаем печатным
+            ocr_logger.info("✍️ Тип текста: ПЕЧАТНЫЙ (по умолчанию)")
+            return TextType.PRINTED
+            
+        except Exception as e:
+            ocr_logger.error(f"❌ Ошибка при определении типа текста: {e}")
+            return TextType.UNKNOWN
+    
     def select_ocr_method(
         self,
         pdf_type: PDFType,
