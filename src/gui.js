@@ -12,10 +12,16 @@ import * as telegramService from "./telegramService.js";
 import { RectangleSelection, initPdfSelection, extractTextFromSelection, extractSelectionAsImage, renderSelectionOverlay } from "./pdfSelection.js";
 import { getApiBaseUrl } from "./config.js";
 
+// Глобальные переменные для управления процессом
+let currentAbortController = null;
+let currentStatusTimer = null;
+let isProcessing = false;
+
 const els = {
   selectPdfBtn: document.getElementById("selectPdfBtn"),
   pdfFileInput: document.getElementById("pdfFileInput"),
   processBtn: document.getElementById("processBtn"),
+  stopProcessBtn: document.getElementById("stopProcessBtn"),
   telegramChatId: document.getElementById("telegramChatId"),
   colorPicker: document.getElementById("colorPicker"),
   status: document.getElementById("statusLine"),
@@ -220,6 +226,26 @@ function clearProgress() {
   progressSteps = [];
   currentStepIndex = -1;
   renderProgress();
+}
+
+// Функция для остановки текущего процесса
+function stopCurrentProcess() {
+  if (currentAbortController) {
+    currentAbortController.abort();
+    currentAbortController = null;
+    log("🛑 Процесс остановлен пользователем");
+  }
+  
+  if (currentStatusTimer) {
+    clearInterval(currentStatusTimer);
+    currentStatusTimer = null;
+  }
+  
+  isProcessing = false;
+  els.processBtn.style.display = 'inline-block';
+  els.stopProcessBtn.style.display = 'none';
+  els.status.textContent = "💤 Обработка остановлена";
+  updateProgress('OCR Processing', 'error', 'Процесс остановлен пользователем');
 }
 
 function renderProgress() {
@@ -953,6 +979,17 @@ els.pdfFileInput.addEventListener("change", async (e) => {
   }
   
   playTeleportFX();
+  
+  // Останавливаем текущий процесс при загрузке нового файла
+  if (isProcessing) {
+    stopCurrentProcess();
+  }
+});
+
+// ========== STOP PROCESS BUTTON ==========
+els.stopProcessBtn.addEventListener("click", () => {
+  stopCurrentProcess();
+  playClick(400);
 });
 
 // ========== PDF PROCESSING ==========
@@ -963,6 +1000,18 @@ els.processBtn.addEventListener("click", async () => {
     playClick(250);
     return;
   }
+  
+  // Останавливаем предыдущий процесс, если он идет
+  if (isProcessing) {
+    stopCurrentProcess();
+    await new Promise(resolve => setTimeout(resolve, 500)); // Даем время на остановку
+  }
+  
+  // Создаем новый AbortController для этого процесса
+  currentAbortController = new AbortController();
+  isProcessing = true;
+  els.processBtn.style.display = 'none';
+  els.stopProcessBtn.style.display = 'inline-block';
   
   clearProgress();
   els.status.textContent = "⏳ Processing PDF...";
@@ -1052,7 +1101,8 @@ els.processBtn.addEventListener("click", async () => {
           languages,
           null,
           userSettings.ocrMethod || 'auto',
-          userSettings.ocrQuality || 'balanced'
+          userSettings.ocrQuality || 'balanced',
+          currentAbortController ? currentAbortController.signal : null
         );
       }
     } else {
