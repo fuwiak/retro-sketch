@@ -702,7 +702,7 @@ function drawPolygon() {
     
     // Point number
     ctx.fillStyle = uiColor;
-    ctx.font = 'bold 12px monospace';
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(String(index + 1), point.x, point.y);
@@ -938,7 +938,7 @@ els.pdfCanvas.addEventListener("mousemove", (e) => {
       
       // Point number
       ctx.fillStyle = uiColor;
-      ctx.font = 'bold 12px monospace';
+      ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(String(index + 1), point.x, point.y);
@@ -1914,7 +1914,7 @@ function renderCloudFolder(data) {
       background: rgba(0, 0, 0, 0.5);
       border: 1px solid var(--ui-color);
       color: var(--ui-color);
-      font-family: 'Share Tech Mono', monospace;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
       font-size: 0.9rem;
     " />
   </div>`;
