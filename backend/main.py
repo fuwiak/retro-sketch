@@ -20,6 +20,7 @@ from services.translation_service import TranslationService
 from services.export_service import ExportService
 from services.cloud_service import CloudService
 from services.telegram_service import TelegramService
+from services.openrouter_service import OpenRouterService
 from services.logger import api_logger, log_api_request, log_api_response
 
 # Load environment variables
@@ -46,6 +47,7 @@ translation_service = TranslationService()
 export_service = ExportService()
 cloud_service = CloudService()
 telegram_service = TelegramService()
+openrouter_service = OpenRouterService()
 
 # Frontend static files configuration
 # Check if frontend dist directory exists (for Railway deployment)
@@ -71,7 +73,8 @@ async def health():
         "services": {
             "ocr": ocr_service.is_available(),
             "translation": translation_service.is_available(),
-            "export": export_service.is_available()
+            "export": export_service.is_available(),
+            "openrouter": openrouter_service.is_available()
         }
     }
 
@@ -148,6 +151,211 @@ async def process_ocr(
         raise HTTPException(
             status_code=500,
             detail=f"OCR processing failed: {str(e)}"
+        )
+
+
+# ========== OPENROUTER SKETCH ANALYSIS ENDPOINTS ==========
+
+class SketchAnalysisRequest(BaseModel):
+    image: str  # Base64 encoded image
+    model: Optional[str] = None  # Optional: specific OpenRouter model
+    temperature: float = 0.0
+    max_tokens: int = 2000
+
+
+@app.post("/api/openrouter/analyze-sketch")
+async def analyze_sketch(request: SketchAnalysisRequest):
+    """
+    Analyze technical drawing/sketch using OpenRouter vision models
+    Extracts: materials, GOST/OST/TU standards, Ra values, fits, heat treatment, and raw text
+    """
+    start_time = time.time()
+    log_api_request("POST", "/api/openrouter/analyze-sketch", {})
+    
+    try:
+        if not openrouter_service.is_available():
+            raise HTTPException(
+                status_code=503,
+                detail="OpenRouter API key not configured. Please set OPENROUTER_API_KEY in environment variables."
+            )
+        
+        api_logger.info("Starting sketch analysis with OpenRouter")
+        
+        # Analyze sketch with OpenRouter vision models
+        result = await openrouter_service.analyze_sketch_with_vision(
+            image_base64=request.image,
+            model=request.model,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens
+        )
+        
+        if not result:
+            raise HTTPException(
+                status_code=503,
+                detail="Failed to analyze sketch. All OpenRouter models failed. Check API key and internet connection."
+            )
+        
+        response_time = time.time() - start_time
+        log_api_response("POST", "/api/openrouter/analyze-sketch", 200, response_time)
+        
+        api_logger.info(
+            f"Sketch analysis completed - Model: {result.get('model')}, "
+            f"Time: {response_time:.2f}s"
+        )
+        
+        return {
+            "success": True,
+            "data": result.get("data", {}),
+            "model": result.get("model"),
+            "provider": result.get("provider"),
+            "processing_time": response_time
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        response_time = time.time() - start_time
+        log_api_response("POST", "/api/openrouter/analyze-sketch", 500, response_time)
+        api_logger.error(f"Sketch analysis failed - Error: {str(e)}", exc_info=True)
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"Sketch analysis failed: {str(e)}"
+        )
+
+
+class TextExtractionRequest(BaseModel):
+    image: str  # Base64 encoded image
+    languages: List[str] = ["rus", "eng"]
+    model: Optional[str] = None
+
+
+@app.post("/api/openrouter/extract-text")
+async def extract_text_from_sketch(request: TextExtractionRequest):
+    """
+    Extract text from sketch/drawing using OpenRouter vision models
+    Supports Russian and English text extraction
+    """
+    start_time = time.time()
+    log_api_request("POST", "/api/openrouter/extract-text", {"languages": request.languages})
+    
+    try:
+        if not openrouter_service.is_available():
+            raise HTTPException(
+                status_code=503,
+                detail="OpenRouter API key not configured. Please set OPENROUTER_API_KEY in environment variables."
+            )
+        
+        api_logger.info(f"Extracting text from sketch - Languages: {request.languages}")
+        
+        # Extract text with OpenRouter vision models
+        text = await openrouter_service.extract_text_from_image(
+            image_base64=request.image,
+            languages=request.languages,
+            model=request.model
+        )
+        
+        if not text:
+            raise HTTPException(
+                status_code=503,
+                detail="Failed to extract text. All OpenRouter models failed. Check API key and internet connection."
+            )
+        
+        response_time = time.time() - start_time
+        log_api_response("POST", "/api/openrouter/extract-text", 200, response_time)
+        
+        api_logger.info(
+            f"Text extraction completed - "
+            f"Time: {response_time:.2f}s, Text length: {len(text)} chars"
+        )
+        
+        return {
+            "success": True,
+            "text": text,
+            "languages": request.languages,
+            "processing_time": response_time
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        response_time = time.time() - start_time
+        log_api_response("POST", "/api/openrouter/extract-text", 500, response_time)
+        api_logger.error(f"Text extraction failed - Error: {str(e)}", exc_info=True)
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"Text extraction failed: {str(e)}"
+        )
+
+
+class OpenRouterTranslationRequest(BaseModel):
+    text: str
+    target_language: str = "en"  # "en" for English, "ru" for Russian
+    model: Optional[str] = None
+    use_glossary: bool = True
+
+
+@app.post("/api/openrouter/translate")
+async def translate_with_openrouter(request: OpenRouterTranslationRequest):
+    """
+    Translate text using OpenRouter text models
+    Supports technical glossary for Russian to English translation
+    """
+    start_time = time.time()
+    log_api_request("POST", "/api/openrouter/translate", {"target_language": request.target_language})
+    
+    try:
+        if not openrouter_service.is_available():
+            raise HTTPException(
+                status_code=503,
+                detail="OpenRouter API key not configured. Please set OPENROUTER_API_KEY in environment variables."
+            )
+        
+        api_logger.info(f"Translating text - Target language: {request.target_language}")
+        
+        # Translate with OpenRouter text models
+        translated = await openrouter_service.translate_text(
+            text=request.text,
+            target_language=request.target_language,
+            model=request.model,
+            use_glossary=request.use_glossary
+        )
+        
+        if not translated:
+            raise HTTPException(
+                status_code=503,
+                detail="Failed to translate text. All OpenRouter models failed. Check API key and internet connection."
+            )
+        
+        response_time = time.time() - start_time
+        log_api_response("POST", "/api/openrouter/translate", 200, response_time)
+        
+        api_logger.info(
+            f"Translation completed - "
+            f"Time: {response_time:.2f}s, "
+            f"Original length: {len(request.text)} chars, "
+            f"Translated length: {len(translated)} chars"
+        )
+        
+        return {
+            "success": True,
+            "originalText": request.text,
+            "translatedText": translated,
+            "targetLanguage": request.target_language,
+            "processing_time": response_time
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        response_time = time.time() - start_time
+        log_api_response("POST", "/api/openrouter/translate", 500, response_time)
+        api_logger.error(f"Translation failed - Error: {str(e)}", exc_info=True)
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"Translation failed: {str(e)}"
         )
 
 
