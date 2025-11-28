@@ -121,8 +121,15 @@ async def process_ocr(
             ocr_quality=ocr_quality
         )
         
+        # Проверяем, что результат валиден
+        if not result:
+            raise HTTPException(
+                status_code=500,
+                detail="OCR processing failed: service returned empty result. Используется только OpenRouter + OCR fallback'и."
+            )
+        
         # Extract processing info
-        processing_info = result.get("processing_info", {})
+        processing_info = result.get("processing_info", {}) if result else {}
         
         response_time = time.time() - start_time
         log_api_response("POST", "/api/ocr/process", 200, response_time)
