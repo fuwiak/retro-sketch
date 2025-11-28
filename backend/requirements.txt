@@ -12,9 +12,10 @@ pytesseract==0.3.10
 Pillow==10.2.0
 pdf2image==1.16.3
 numpy==1.26.3
-opencv-python-headless==4.9.0.80
 beautifulsoup4==4.12.2
 requests==2.31.0
 paddlepaddle==2.6.2
 paddleocr==2.7.3
+# opencv-python-headless опционален - убран из-за проблем с libGL.so.1 в Docker
+# OCR работает без него, используя только PIL для preprocessing
 

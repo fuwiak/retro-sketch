@@ -38,11 +38,17 @@ try:
 except ImportError:
     NUMPY_AVAILABLE = False
 
+# OpenCV опционален - используется только для улучшения качества OCR
+OPENCV_AVAILABLE = False
 try:
     import cv2
+    # Проверяем, что cv2 действительно работает (не только импортируется)
+    _ = cv2.__version__
     OPENCV_AVAILABLE = True
-except ImportError:
+except (ImportError, AttributeError, OSError) as e:
+    # OSError может возникнуть если отсутствуют системные библиотеки (libGL.so.1)
     OPENCV_AVAILABLE = False
+    api_logger.debug(f"OpenCV недоступен: {e}")
 
 try:
     from pdf2image import convert_from_bytes
