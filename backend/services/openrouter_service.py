@@ -607,27 +607,27 @@ class OpenRouterService:
                         
                         # Конвертируем в grayscale
                         gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
-                    
-                    # Применяем адаптивную бинаризацию (Оtsu или адаптивная)
-                    # Это критически важно для чертежей с разным освещением
-                    binary = cv2.adaptiveThreshold(
-                        gray, 255, 
-                        cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                        cv2.THRESH_BINARY, 
-                        11, 2
-                    )
-                    
-                    # Улучшаем контраст еще раз
-                    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-                    binary = clahe.apply(binary)
-                    
-                    # Убираем шум
-                    binary = cv2.medianBlur(binary, 3)
-                    
-                    # Конвертируем обратно в PIL
-                    image = Image.fromarray(binary)
-                    api_logger.info("   🔬 Применена адаптивная бинаризация (OpenCV)")
-                except (ImportError, OSError, AttributeError) as e:
+                        
+                        # Применяем адаптивную бинаризацию (Оtsu или адаптивная)
+                        # Это критически важно для чертежей с разным освещением
+                        binary = cv2.adaptiveThreshold(
+                            gray, 255, 
+                            cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                            cv2.THRESH_BINARY, 
+                            11, 2
+                        )
+                        
+                        # Улучшаем контраст еще раз
+                        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+                        binary = clahe.apply(binary)
+                        
+                        # Убираем шум
+                        binary = cv2.medianBlur(binary, 3)
+                        
+                        # Конвертируем обратно в PIL
+                        image = Image.fromarray(binary)
+                        api_logger.info("   🔬 Применена адаптивная бинаризация (OpenCV)")
+                    except (ImportError, OSError, AttributeError) as e:
                     api_logger.debug(f"   ⚠️ OpenCV недоступен для бинаризации: {e}")
                     # Fallback без OpenCV - используем PIL методы
             else:
