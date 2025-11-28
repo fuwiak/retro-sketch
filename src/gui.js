@@ -1072,7 +1072,7 @@ els.processBtn.addEventListener("click", async () => {
     log(`📝 Languages: ${languages.join(', ')}`);
     els.status.textContent = "⏳ Running OCR...";
     
-    let ocrResult;
+    // ocrResult уже объявлен глобально
     if (currentCropArea) {
       // Use cropped image (polygon or rectangle)
       const areaInfo = currentCropArea.type === 'polygon' 
