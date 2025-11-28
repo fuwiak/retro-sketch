@@ -1085,26 +1085,29 @@ els.processBtn.addEventListener("click", async () => {
       const progressCallback = (msg) => {
         addProgressSubStep('OCR Processing', msg);
         log(`📝 ${msg}`);
-        // Обновляем основной статус, если в сообщении есть время
-        if (msg.includes('⏳ Обработка')) {
-          updateProgress('OCR Processing', 'active', msg);
-          els.status.textContent = msg.replace('⏳ Обработка...', '⏳ OCR Processing');
-        }
       };
       
-      ocrResult = await pdfProcessor.processPdfWithOCR(
-        currentPdfFile, 
-        languages, 
-        progressCallback,
-        userSettings.ocrMethod || 'auto',
-        userSettings.ocrQuality || 'balanced'
-      );
-      addProgressSubStep('OCR Processing', `✅ OCR completed on full PDF`);
-      addProgressSubStep('OCR Processing', `Model used: ${ocrResult.model || 'unknown'}`);
-      addProgressSubStep('OCR Processing', `Confidence: ${(ocrResult.confidence * 100).toFixed(1)}%`);
-      log(`✅ OCR completed on full PDF`);
-      log(`📊 Model used: ${ocrResult.model || 'unknown'}`);
-      log(`📊 Confidence: ${(ocrResult.confidence * 100).toFixed(1)}%`);
+      try {
+        ocrResult = await pdfProcessor.processPdfWithOCR(
+          currentPdfFile, 
+          languages, 
+          progressCallback,
+          userSettings.ocrMethod || 'auto',
+          userSettings.ocrQuality || 'balanced'
+        );
+        addProgressSubStep('OCR Processing', `✅ OCR completed on full PDF`);
+        addProgressSubStep('OCR Processing', `Model used: ${ocrResult.model || 'unknown'}`);
+        addProgressSubStep('OCR Processing', `Confidence: ${(ocrResult.confidence * 100).toFixed(1)}%`);
+        log(`✅ OCR completed on full PDF`);
+        log(`📊 Model used: ${ocrResult.model || 'unknown'}`);
+        log(`📊 Confidence: ${(ocrResult.confidence * 100).toFixed(1)}%`);
+      } finally {
+        // Останавливаем таймер в любом случае (успех или ошибка)
+        if (statusTimer) {
+          clearInterval(statusTimer);
+          statusTimer = null;
+        }
+      }
     }
     
     updateProgress('OCR Processing', 'completed', `${ocrResult.text.length} characters extracted${ocrResult.model ? ` (${ocrResult.model})` : ''}`);
