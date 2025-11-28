@@ -174,42 +174,95 @@ export function extractHeatTreatment(text) {
 }
 
 /**
+ * Extract structured data using OpenRouter (same method as chat)
+ */
+async function extractStructuredDataWithOpenRouter(ocrText) {
+  try {
+    const { getApiBaseUrl } = await import('./config.js');
+    const apiBaseUrl = getApiBaseUrl();
+    
+    const response = await fetch(`${apiBaseUrl}/openrouter/extract-structured-data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        ocr_text: ocrText
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    
+    if (result.success && result.data) {
+      return result.data;
+    }
+    
+    throw new Error('Invalid response from OpenRouter');
+  } catch (error) {
+    console.warn('OpenRouter extraction failed:', error);
+    throw error;
+  }
+}
+
+/**
  * Extract all key data from OCR text
- * Uses AI extraction first, falls back to regex if needed
+ * Uses OpenRouter first (same as chat), then Groq, then regex fallback
  */
 export async function extractAllData(ocrText) {
+  let aiData = null;
+  
+  // Step 1: Try OpenRouter first (same method as chat - works great!)
   try {
-    // Try AI extraction first
-    const { extractStructuredData } = await import('./groqAgent.js');
-    const aiData = await extractStructuredData(ocrText);
+    console.log('📊 Извлечение данных через OpenRouter (как в чате)...');
+    aiData = await extractStructuredDataWithOpenRouter(ocrText);
+    console.log('✅ OpenRouter успешно извлек данные');
+  } catch (openRouterError) {
+    console.warn('OpenRouter extraction failed, trying Groq fallback:', openRouterError);
     
-    // Merge with regex fallback for completeness
-    const regexData = {
-      materials: extractMaterials(ocrText),
-      standards: extractGOSTStandards(ocrText),
-      raValues: extractRaValues(ocrText),
-      fits: extractFits(ocrText),
-      heatTreatment: extractHeatTreatment(ocrText),
-    };
-    
-    // Combine AI and regex results, prefer AI
+    // Step 2: Fallback to Groq if OpenRouter fails
+    try {
+      const { extractStructuredData } = await import('./groqAgent.js');
+      aiData = await extractStructuredData(ocrText);
+      console.log('✅ Groq успешно извлек данные');
+    } catch (groqError) {
+      console.warn('Groq extraction also failed:', groqError);
+      aiData = null;
+    }
+  }
+  
+  // Always use regex as additional fallback/complement
+  const regexData = {
+    materials: extractMaterials(ocrText),
+    standards: extractGOSTStandards(ocrText),
+    raValues: extractRaValues(ocrText),
+    fits: extractFits(ocrText),
+    heatTreatment: extractHeatTreatment(ocrText),
+  };
+  
+  // Combine AI and regex results
+  if (aiData) {
+    // Merge AI and regex, prefer AI but add any additional from regex
     return {
-      materials: [...new Set([...aiData.materials, ...regexData.materials])],
-      standards: [...new Set([...aiData.standards, ...regexData.standards])],
-      raValues: [...new Set([...aiData.raValues, ...regexData.raValues])].sort((a, b) => a - b),
-      fits: [...new Set([...aiData.fits, ...regexData.fits])],
-      heatTreatment: [...new Set([...aiData.heatTreatment, ...regexData.heatTreatment])],
+      materials: [...new Set([...aiData.materials || [], ...regexData.materials])],
+      standards: [...new Set([...aiData.standards || [], ...regexData.standards])],
+      raValues: [...new Set([...aiData.raValues || [], ...regexData.raValues])].sort((a, b) => a - b),
+      fits: [...new Set([...aiData.fits || [], ...regexData.fits])],
+      heatTreatment: [...new Set([...aiData.heatTreatment || [], ...regexData.heatTreatment])],
       rawText: ocrText
     };
-  } catch (error) {
-    console.warn('AI extraction failed, using regex fallback:', error);
-    // Fallback to regex only
+  } else {
+    // Fallback to regex only if all AI methods failed
+    console.warn('All AI extraction methods failed, using regex fallback');
     return {
-      materials: extractMaterials(ocrText),
-      standards: extractGOSTStandards(ocrText),
-      raValues: extractRaValues(ocrText),
-      fits: extractFits(ocrText),
-      heatTreatment: extractHeatTreatment(ocrText),
+      materials: regexData.materials,
+      standards: regexData.standards,
+      raValues: regexData.raValues,
+      fits: regexData.fits,
+      heatTreatment: regexData.heatTreatment,
       rawText: ocrText
     };
   }

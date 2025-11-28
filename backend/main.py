@@ -387,6 +387,59 @@ async def extract_text_from_sketch(request: TextExtractionRequest):
         )
 
 
+class StructuredDataExtractionRequest(BaseModel):
+    ocr_text: str  # OCR текст для извлечения структурированных данных
+
+
+@app.post("/api/openrouter/extract-structured-data")
+async def extract_structured_data_from_text(request: StructuredDataExtractionRequest):
+    """
+    Извлечение структурированных данных из OCR текста через OpenRouter
+    Использует те же методы, что и чат (Claude 3.5 Sonnet)
+    """
+    start_time = time.time()
+    log_api_request("POST", "/api/openrouter/extract-structured-data", {})
+    
+    try:
+        if not openrouter_service.is_available():
+            raise HTTPException(
+                status_code=503,
+                detail="OpenRouter API key not configured. Please set OPENROUTER_API_KEY in environment variables."
+            )
+        
+        api_logger.info(f"Extracting structured data from OCR text ({len(request.ocr_text)} chars)")
+        
+        # Извлекаем структурированные данные через OpenRouter
+        structured_data = await openrouter_service.extract_structured_data(request.ocr_text)
+        
+        if not structured_data:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to extract structured data from text"
+            )
+        
+        response_time = time.time() - start_time
+        log_api_response("POST", "/api/openrouter/extract-structured-data", 200, response_time)
+        
+        return {
+            "success": True,
+            "data": structured_data,
+            "processing_time": response_time
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        response_time = time.time() - start_time
+        log_api_response("POST", "/api/openrouter/extract-structured-data", 500, response_time)
+        api_logger.error(f"Structured data extraction failed - Error: {str(e)}", exc_info=True)
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"Structured data extraction failed: {str(e)}"
+        )
+
+
 class SketchAnalysisCompleteRequest(BaseModel):
     """Комплексный запрос: анализ чертежа + извлечение текста + перевод"""
     image: str  # Base64 encoded image

@@ -1157,6 +1157,114 @@ class OpenRouterService:
             api_logger.error(f"Error asking question: {e}")
             return None
     
+    async def extract_structured_data(self, ocr_text: str) -> Optional[dict]:
+        """
+        Извлекает структурированные данные из OCR текста используя OpenRouter
+        Аналогично методу из чата, но для структурированного извлечения данных
+        Возвращает словарь с materials, standards, raValues, fits, heatTreatment
+        """
+        if not self.api_key:
+            api_logger.warning("OpenRouter API key not found")
+            return None
+        
+        model_to_use = DEFAULT_TEXT_MODEL  # Claude 3.5 Sonnet - та же модель, что в чате
+        
+        try:
+            url = self.api_url
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "http://localhost:5000",
+                "X-Title": "Retro Drawing Analyzer"
+            }
+            
+            prompt = f"""Ты эксперт по извлечению структурированных данных из технических чертежей.
+
+Извлеки из следующего OCR текста технического чертежа все данные и верни ТОЛЬКО валидный JSON без объяснений:
+
+{{
+  "materials": ["массив марок материалов, например: сталь 45, 40Х"],
+  "standards": ["массив стандартов ГОСТ/ОСТ/ТУ, например: ГОСТ 1050, ОСТ 12"],
+  "raValues": [массив чисел - значения шероховатости Ra, например: 1.6, 3.2],
+  "fits": ["массив посадок, например: H7/f7, H8/g7"],
+  "heatTreatment": ["массив термообработки, например: HRC 45-50, закалка"]
+}}
+
+Извлеки ВСЕ экземпляры каждого типа данных. Верни ТОЛЬКО валидный JSON.
+
+OCR текст:
+{ocr_text[:5000]}"""
+
+            payload = {
+                "model": model_to_use,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "Ты эксперт по машиностроению и техническим чертежам. Извлекай структурированные данные и возвращай только валидный JSON без объяснений."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.1,
+                "max_tokens": 2000,
+                "response_format": {"type": "json_object"}
+            }
+            
+            api_logger.info(f"📊 Извлечение структурированных данных через {model_to_use}")
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(url, headers=headers, json=payload)
+                
+                if response.status_code != 200:
+                    api_logger.error(f"Model {model_to_use} failed: HTTP {response.status_code}")
+                    return None
+                
+                result = response.json()
+                content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+                
+                if content:
+                    try:
+                        import json
+                        data = json.loads(content)
+                        
+                        # Проверяем и нормализуем структуру
+                        extracted = {
+                            "materials": data.get("materials", []) if isinstance(data.get("materials"), list) else [],
+                            "standards": data.get("standards", []) if isinstance(data.get("standards"), list) else [],
+                            "raValues": [float(x) for x in data.get("raValues", []) if isinstance(x, (int, float))] if isinstance(data.get("raValues"), list) else [],
+                            "fits": data.get("fits", []) if isinstance(data.get("fits"), list) else [],
+                            "heatTreatment": data.get("heatTreatment", []) if isinstance(data.get("heatTreatment"), list) else []
+                        }
+                        
+                        api_logger.info(f"✅ Извлечено: {len(extracted['materials'])} материалов, {len(extracted['standards'])} стандартов, {len(extracted['raValues'])} Ra значений")
+                        return extracted
+                    except json.JSONDecodeError as e:
+                        api_logger.error(f"Ошибка парсинга JSON: {e}")
+                        # Пытаемся извлечь JSON из текста
+                        import re
+                        json_match = re.search(r'\{[\s\S]*\}', content)
+                        if json_match:
+                            try:
+                                data = json.loads(json_match.group(0))
+                                return {
+                                    "materials": data.get("materials", []),
+                                    "standards": data.get("standards", []),
+                                    "raValues": data.get("raValues", []),
+                                    "fits": data.get("fits", []),
+                                    "heatTreatment": data.get("heatTreatment", [])
+                                }
+                            except:
+                                pass
+                        return None
+                
+                return None
+                
+        except Exception as e:
+            api_logger.error(f"Error extracting structured data: {e}")
+            return None
+    
     def _apply_technical_glossary(self, text: str) -> str:
         """Apply technical glossary for better translation"""
         glossary = {
