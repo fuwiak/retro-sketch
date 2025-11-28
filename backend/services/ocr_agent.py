@@ -43,6 +43,14 @@ class PDFType(Enum):
     UNKNOWN = "unknown"
 
 
+class TextType(Enum):
+    """Тип текста в документе"""
+    PRINTED = "printed"  # Печатный текст
+    HANDWRITTEN = "handwritten"  # Рукописный текст
+    MIXED = "mixed"  # Смешанный (печатный + рукописный)
+    UNKNOWN = "unknown"
+
+
 class OCRMethod(Enum):
     """Методы OCR обработки"""
     OPENROUTER_OLMOCR = "openrouter_olmocr"  # olmOCR через OpenRouter - лучший для raster PDF

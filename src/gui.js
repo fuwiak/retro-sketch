@@ -951,31 +951,61 @@ els.pdfFileInput.addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   
-  if (file.type !== "application/pdf") {
-    els.status.textContent = "❌ Please select a PDF file";
-    log("❌ Invalid file type");
+  // Поддерживаем PDF, PNG, JPG, JPEG
+  const supportedTypes = ["application/pdf", "image/png", "image/jpeg", "image/jpg"];
+  if (!supportedTypes.includes(file.type)) {
+    els.status.textContent = "❌ Please select a PDF or image file (PNG/JPG)";
+    log("❌ Invalid file type - поддерживаются только PDF, PNG, JPG");
     playClick(250);
     return;
   }
   
+  const isImage = file.type.startsWith("image/");
   currentPdfFile = file;
-  els.status.textContent = `📄 Selected: ${file.name}`;
-  log(`📄 PDF file selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
   
-  // Show preview
-  try {
-    const preview = await pdfProcessor.renderPdfPreview(file, els.pdfCanvas);
-    if (typeof preview === 'string' && preview.startsWith('data:')) {
-      // Image data URL
-      els.pdfPreview.innerHTML = `<img src="${preview}" style="max-width: 100%; height: auto;" />`;
-    } else if (typeof preview === 'string') {
-      // Object URL
-      els.pdfPreview.innerHTML = `<iframe src="${preview}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+  if (isImage) {
+    els.status.textContent = `🖼️ Selected: ${file.name}`;
+    log(`🖼️ Image file selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+    
+    // Show preview for images
+    try {
+      const imageUrl = URL.createObjectURL(file);
+      els.pdfPreview.innerHTML = `<img src="${imageUrl}" style="max-width: 100%; height: auto; max-height: 600px;" />`;
+      els.pdfPreview.classList.remove("hidden");
+      
+      // Render on canvas for processing
+      const img = new Image();
+      img.onload = () => {
+        els.pdfCanvas.width = img.width;
+        els.pdfCanvas.height = img.height;
+        const ctx = els.pdfCanvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        els.pdfCanvas.style.display = 'block';
+      };
+      img.src = imageUrl;
+    } catch (error) {
+      log(`⚠️ Preview error: ${error.message}`);
+      els.pdfPreview.innerHTML = `<p style="opacity: 0.6; text-align: center; padding: 20px;">Image loaded but preview unavailable</p>`;
     }
-    els.pdfPreview.classList.remove("hidden");
-  } catch (error) {
-    log(`⚠️ Preview error: ${error.message}`);
-    els.pdfPreview.innerHTML = `<p style="opacity: 0.6; text-align: center; padding: 20px;">PDF loaded but preview unavailable</p>`;
+  } else {
+    els.status.textContent = `📄 Selected: ${file.name}`;
+    log(`📄 PDF file selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+    
+    // Show preview for PDF
+    try {
+      const preview = await pdfProcessor.renderPdfPreview(file, els.pdfCanvas);
+      if (typeof preview === 'string' && preview.startsWith('data:')) {
+        // Image data URL
+        els.pdfPreview.innerHTML = `<img src="${preview}" style="max-width: 100%; height: auto;" />`;
+      } else if (typeof preview === 'string') {
+        // Object URL
+        els.pdfPreview.innerHTML = `<iframe src="${preview}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+      }
+      els.pdfPreview.classList.remove("hidden");
+    } catch (error) {
+      log(`⚠️ Preview error: ${error.message}`);
+      els.pdfPreview.innerHTML = `<p style="opacity: 0.6; text-align: center; padding: 20px;">PDF loaded but preview unavailable</p>`;
+    }
   }
   
   playTeleportFX();

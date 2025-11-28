@@ -176,6 +176,17 @@ class OCRService:
         # Определяем количество страниц
         pages = 1
         pdf_type = None
+        text_type = None
+        
+        # Определяем тип текста (печатный/рукописный) для изображений и PDF
+        if self.agent and self.agent.openrouter_service:
+            try:
+                ocr_logger.info("🔍 Определяем тип текста (печатный/рукописный)...")
+                text_type = await self.agent.detect_text_type(file_content, file_type)
+                ocr_logger.info(f"✍️ Тип текста: {text_type.value if text_type else 'unknown'}")
+            except Exception as e:
+                ocr_logger.warning(f"⚠️ Ошибка при определении типа текста: {e}")
+        
         if not is_image:
             try:
                 import PyPDF2
