@@ -14,8 +14,29 @@ import base64
 import json
 import httpx
 import re
+import io
 from typing import Dict, Optional, List
 from services.logger import api_logger
+
+# OCR Fallback libraries
+try:
+    import PyPDF2
+    PYPDF2_AVAILABLE = True
+except ImportError:
+    PYPDF2_AVAILABLE = False
+
+try:
+    import pytesseract
+    from PIL import Image
+    TESSERACT_AVAILABLE = True
+except ImportError:
+    TESSERACT_AVAILABLE = False
+
+try:
+    from pdf2image import convert_from_bytes
+    PDF2IMAGE_AVAILABLE = True
+except ImportError:
+    PDF2IMAGE_AVAILABLE = False
 
 # OpenRouter API configuration
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
@@ -401,11 +422,32 @@ class OpenRouterService:
                     response = await client.post(url, headers=headers, json=payload)
                     
                     if response.status_code != 200:
+                        error_text = response.text[:500] if response.text else "No error message"
                         api_logger.warning(f"Model {model_name} failed: HTTP {response.status_code}")
+                        api_logger.warning(f"   Ошибка: {error_text}")
+                        
+                        # Проверяем, не является ли это ошибкой "cannot process PDF"
+                        if "pdf" in error_text.lower() or "cannot process" in error_text.lower() or "not capable" in error_text.lower():
+                            api_logger.warning(f"⚠️ Модель {model_name} не может обработать PDF, пропускаем...")
                         continue
                     
                     result = response.json()
                     content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    
+                    # Проверяем, не содержит ли ответ сообщение об ошибке
+                    if content:
+                        content_lower = content.lower()
+                        error_phrases = [
+                            "cannot process", "not capable", "i am not able", 
+                            "unable to", "i'm not able", "cannot directly process",
+                            "i'm a large language model", "i am a large language model",
+                            "unfortunately", "i am not capable of directly processing",
+                            "i'm not capable", "cannot directly", "unable to process"
+                        ]
+                        if any(phrase in content_lower for phrase in error_phrases):
+                            api_logger.warning(f"⚠️ Модель {model_name} сообщает, что не может обработать данные")
+                            api_logger.warning(f"   Ответ: {content[:300]}...")
+                            continue
                     
                     if content and len(content.strip()) > 0:
                         api_logger.info(f"✅ УСПЕХ! Текст извлечен с моделью {model_name} (попытка {idx}/{len(models_to_try)})")
@@ -424,17 +466,141 @@ class OpenRouterService:
                 api_logger.error(f"Error extracting text with {model_name}: {e}")
                 continue
         
+        # Если все OpenRouter модели не сработали, пробуем OCR fallback'и
+        api_logger.warning("="*80)
+        api_logger.warning("⚠️ Все OpenRouter модели не смогли извлечь текст")
+        api_logger.warning(f"   Испробовано моделей: {len(models_to_try)}")
+        api_logger.warning("🔄 Переключаемся на OCR fallback'и (PyPDF2, Tesseract)...")
+        api_logger.warning("="*80)
+        
+        # Попытка извлечь текст через OCR fallback'и
+        ocr_text = await self._extract_text_with_ocr_fallback(image_base64, languages)
+        if ocr_text:
+            return ocr_text
+        
         api_logger.error("="*80)
-        api_logger.error("❌ КРИТИЧЕСКАЯ ОШИБКА: Все модели не смогли извлечь текст!")
-        api_logger.error(f"   Было испробовано моделей: {len(models_to_try)}")
+        api_logger.error("❌ КРИТИЧЕСКАЯ ОШИБКА: Все методы не смогли извлечь текст!")
+        api_logger.error(f"   Испробовано OpenRouter моделей: {len(models_to_try)}")
+        api_logger.error("   Испробованы OCR fallback'и: PyPDF2, Tesseract")
         api_logger.error("   Проверьте:")
         api_logger.error("   1. API ключ OPENROUTER_API_KEY в переменных окружения Railway")
         api_logger.error("   2. Интернет-соединение")
         api_logger.error("   3. Доступность API провайдеров")
-        api_logger.error("   4. Формат изображения (должен быть base64)")
+        api_logger.error("   4. Формат данных (должен быть base64 изображение или PDF)")
         api_logger.error("="*80)
-        api_logger.warning("⚠️ ВАЖНО: Система пробовала ВСЕ доступные модели для извлечения текста")
-        api_logger.warning(f"   Список моделей: {', '.join(models_to_try[:5])}... и еще {len(models_to_try)-5} моделей")
+        return None
+    
+    async def _extract_text_with_ocr_fallback(
+        self,
+        image_base64: str,
+        languages: List[str]
+    ) -> Optional[str]:
+        """
+        Fallback методы OCR для извлечения текста, когда OpenRouter модели не сработали
+        Использует PyPDF2 для PDF с текстом и Tesseract для изображений/сканированных PDF
+        """
+        api_logger.info("🔧 Используем OCR fallback'и...")
+        
+        try:
+            # Декодируем base64
+            try:
+                image_data = base64.b64decode(image_base64)
+            except Exception as e:
+                api_logger.error(f"❌ Ошибка декодирования base64: {e}")
+                return None
+            
+            # Проверяем, является ли это PDF
+            is_pdf = image_data[:4] == b'%PDF'
+            
+            if is_pdf:
+                api_logger.info("📄 Обнаружен PDF файл, пробуем извлечь текст...")
+                
+                # Метод 1: PyPDF2 для PDF с текстовым слоем
+                if PYPDF2_AVAILABLE:
+                    try:
+                        api_logger.info("   Попытка 1: PyPDF2 (для PDF с текстом)...")
+                        pdf_reader = PyPDF2.PdfReader(io.BytesIO(image_data))
+                        text_parts = []
+                        
+                        for page_num, page in enumerate(pdf_reader.pages, 1):
+                            try:
+                                page_text = page.extract_text()
+                                if page_text.strip():
+                                    text_parts.append(f"--- Страница {page_num} ---\n{page_text}")
+                            except Exception as e:
+                                api_logger.warning(f"   Ошибка извлечения текста со страницы {page_num}: {e}")
+                                continue
+                        
+                        if text_parts:
+                            full_text = "\n\n".join(text_parts)
+                            api_logger.info(f"✅ PyPDF2 успешно извлек текст: {len(full_text)} символов")
+                            return full_text
+                        else:
+                            api_logger.warning("   PyPDF2 не нашел текста (возможно, сканированный PDF)")
+                    except Exception as e:
+                        api_logger.warning(f"   PyPDF2 не сработал: {e}")
+                
+                # Метод 2: Tesseract OCR для сканированных PDF
+                if TESSERACT_AVAILABLE and PDF2IMAGE_AVAILABLE:
+                    try:
+                        api_logger.info("   Попытка 2: pdf2image + Tesseract OCR (для сканированных PDF)...")
+                        
+                        # Конвертируем PDF в изображения
+                        images = convert_from_bytes(image_data)
+                        api_logger.info(f"   PDF конвертирован в {len(images)} изображений")
+                        
+                        # Маппинг языков для Tesseract
+                        lang_map = {
+                            "rus": "rus", "ru": "rus", "russian": "rus",
+                            "eng": "eng", "en": "eng", "english": "eng"
+                        }
+                        tesseract_langs = "+".join([lang_map.get(lang.lower(), "eng") for lang in languages])
+                        
+                        text_parts = []
+                        for page_num, img in enumerate(images, 1):
+                            try:
+                                page_text = pytesseract.image_to_string(img, lang=tesseract_langs)
+                                if page_text.strip():
+                                    text_parts.append(f"--- Страница {page_num} ---\n{page_text}")
+                            except Exception as e:
+                                api_logger.warning(f"   Ошибка OCR на странице {page_num}: {e}")
+                                continue
+                        
+                        if text_parts:
+                            full_text = "\n\n".join(text_parts)
+                            api_logger.info(f"✅ Tesseract успешно извлек текст: {len(full_text)} символов")
+                            return full_text
+                    except Exception as e:
+                        api_logger.error(f"   Tesseract OCR не сработал: {e}")
+            else:
+                # Это изображение, используем Tesseract OCR
+                if TESSERACT_AVAILABLE:
+                    try:
+                        api_logger.info("🖼️ Обнаружено изображение, используем Tesseract OCR...")
+                        
+                        # Открываем изображение
+                        image = Image.open(io.BytesIO(image_data))
+                        
+                        # Маппинг языков
+                        lang_map = {
+                            "rus": "rus", "ru": "rus", "russian": "rus",
+                            "eng": "eng", "en": "eng", "english": "eng"
+                        }
+                        tesseract_langs = "+".join([lang_map.get(lang.lower(), "eng") for lang in languages])
+                        
+                        text = pytesseract.image_to_string(image, lang=tesseract_langs)
+                        
+                        if text.strip():
+                            api_logger.info(f"✅ Tesseract успешно извлек текст: {len(text)} символов")
+                            return text
+                        else:
+                            api_logger.warning("   Tesseract не нашел текста в изображении")
+                    except Exception as e:
+                        api_logger.error(f"   Tesseract OCR не сработал: {e}")
+            
+        except Exception as e:
+            api_logger.error(f"❌ Ошибка в OCR fallback: {e}")
+        
         return None
     
     async def translate_text(
