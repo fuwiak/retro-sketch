@@ -1552,8 +1552,9 @@ els.chatSendBtn.addEventListener("click", async () => {
     }
     
     // Отправляем вопрос на backend
+    // Note: getApiBaseUrl() already includes /api, so we don't add it again
     const apiBaseUrl = getApiBaseUrl();
-    const response = await fetch(`${apiBaseUrl}/api/openrouter/ask-question`, {
+    const response = await fetch(`${apiBaseUrl}/openrouter/ask-question`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
