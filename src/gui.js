@@ -2408,16 +2408,34 @@ async function loadFileFromCloud(url, fileName) {
         }
       };
       
-      img.onerror = (error) => {
+      img.onerror = async (error) => {
         console.error('Error loading image:', error);
         console.error('Image URL:', imgUrl);
         console.error('Blob info:', { size: blob.size, type: blob.type, mimeType });
         
         // Проверяем первые байты blob для диагностики
-        blob.slice(0, 10).arrayBuffer().then(bytes => {
+        try {
+          const bytes = await blob.slice(0, 10).arrayBuffer();
           const uint8Array = new Uint8Array(bytes);
-          console.error('First bytes:', Array.from(uint8Array).map(b => `0x${b.toString(16)}`).join(' '));
-        }).catch(e => console.error('Error reading blob bytes:', e));
+          const firstBytes = Array.from(uint8Array).map(b => `0x${b.toString(16)}`).join(' ');
+          console.error('First bytes:', firstBytes);
+          
+          // Если это PDF по сигнатуре, но мы пытались обработать как изображение - исправляем
+          if (uint8Array[0] === 0x25 && uint8Array[1] === 0x50 && uint8Array[2] === 0x44 && uint8Array[3] === 0x46) {
+            console.warn('File is actually PDF but was processed as image. Re-processing as PDF...');
+            log(`⚠️ File ${fileName} is PDF by signature, re-processing as PDF...`);
+            URL.revokeObjectURL(imgUrl);
+            
+            // Обрабатываем как PDF
+            const pdfFile = new File([blob], fileName, { type: 'application/pdf' });
+            currentPdfFile = pdfFile;
+            els.cloudFolderStatus.textContent = `⏳ Re-processing as PDF...`;
+            await handlePdfFile(pdfFile);
+            return;
+          }
+        } catch (e) {
+          console.error('Error reading blob bytes:', e);
+        }
         
         els.cloudFolderStatus.textContent = `❌ Error loading ${fileName}`;
         els.status.textContent = `❌ Error loading image: ${fileName}`;
