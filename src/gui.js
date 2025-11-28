@@ -2299,8 +2299,9 @@ async function loadFileFromCloud(url, fileName) {
         els.pdfPreview.classList.remove('hidden');
         els.togglePdf.textContent = '📄 Hide Preview';
         
-        els.cloudFolderStatus.textContent = `✓ Loaded ${fileName}`;
-        log(`✓ Loaded PDF from cloud: ${fileName} (${(blob.size / 1024).toFixed(1)} KB)`);
+        els.status.textContent = `📄 Selected: ${fileName}`;
+        els.cloudFolderStatus.textContent = `✓ Loaded ${fileName} - ready to process`;
+        log(`✓ Loaded PDF from cloud: ${fileName} (${(blob.size / 1024).toFixed(1)} KB) - ready for processing`);
         playTeleportFX();
       } catch (error) {
         console.error('Error rendering PDF from cloud:', error);
@@ -2312,6 +2313,14 @@ async function loadFileFromCloud(url, fileName) {
     } 
     // Handle image files (convert to PDF-like canvas)
     else if (fileName.match(/\.(png|jpg|jpeg)$/i)) {
+      // Определяем MIME тип
+      const mimeType = fileName.match(/\.png$/i) ? 'image/png' : 
+                       fileName.match(/\.jpe?g$/i) ? 'image/jpeg' : 'image/png';
+      
+      // Создаем File объект для изображения
+      const file = new File([blob], fileName, { type: mimeType });
+      currentPdfFile = file; // Устанавливаем файл для обработки
+      
       const img = new Image();
       const imgUrl = URL.createObjectURL(blob);
       img.onload = () => {
@@ -2324,12 +2333,22 @@ async function loadFileFromCloud(url, fileName) {
         
         // Render directly on PDF canvas
         renderImageOnCanvas(canvas);
-        els.cloudFolderStatus.textContent = `✓ Loaded ${fileName}`;
-        log(`✓ Loaded image from cloud: ${fileName}`);
+        
+        // Show preview
+        els.pdfPreview.innerHTML = `<img src="${imgUrl}" style="max-width: 100%; height: auto; max-height: 600px;" />`;
+        els.pdfPreview.classList.remove('hidden');
+        els.pdfPreviewPlaceholder.style.display = 'none';
+        
+        // Update status
+        els.status.textContent = `🖼️ Selected: ${fileName}`;
+        els.cloudFolderStatus.textContent = `✓ Loaded ${fileName} - ready to process`;
+        log(`✓ Loaded image from cloud: ${fileName} (${(blob.size / 1024).toFixed(1)} KB) - ready for processing`);
+        
         URL.revokeObjectURL(imgUrl);
       };
       img.onerror = () => {
         els.cloudFolderStatus.textContent = `❌ Error loading ${fileName}`;
+        els.status.textContent = `❌ Error loading image: ${fileName}`;
         URL.revokeObjectURL(imgUrl);
       };
       img.src = imgUrl;
