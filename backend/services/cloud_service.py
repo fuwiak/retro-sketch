@@ -438,7 +438,13 @@ class CloudService:
                     weblink_match = re.search(r'weblink=([^&]+)', url)
                     if weblink_match:
                         weblink = weblink_match.group(1)
-                        public_url = f"https://cloud.mail.ru/public/{weblink}"
+                        # Декодируем weblink
+                        from urllib.parse import unquote
+                        try:
+                            weblink_decoded = unquote(weblink)
+                        except:
+                            weblink_decoded = weblink
+                        public_url = f"https://cloud.mail.ru/public/{weblink_decoded}"
                         api_logger.info(f"Trying public URL fallback: {public_url}")
                         url = public_url
             
