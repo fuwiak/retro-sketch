@@ -27,10 +27,22 @@ except ImportError:
 
 try:
     import pytesseract
-    from PIL import Image
+    from PIL import Image, ImageEnhance, ImageFilter
     TESSERACT_AVAILABLE = True
 except ImportError:
     TESSERACT_AVAILABLE = False
+
+try:
+    import numpy as np
+    NUMPY_AVAILABLE = True
+except ImportError:
+    NUMPY_AVAILABLE = False
+
+try:
+    import cv2
+    OPENCV_AVAILABLE = True
+except ImportError:
+    OPENCV_AVAILABLE = False
 
 try:
     from pdf2image import convert_from_bytes
@@ -490,6 +502,134 @@ class OpenRouterService:
         api_logger.error("="*80)
         return None
     
+    def _preprocess_image_for_ocr(self, image: Image.Image) -> Image.Image:
+        """
+        Preprocessing изображения для улучшения качества OCR
+        Улучшает контраст, резкость, убирает шум - особенно важно для русского текста
+        """
+        try:
+            api_logger.info("   🔧 Применяем preprocessing для улучшения OCR...")
+            
+            # Конвертируем в RGB если нужно
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            # Метод 1: Увеличиваем разрешение (минимум 300 DPI для качественного OCR)
+            original_size = image.size
+            min_dpi = 300
+            scale_factor = max(1.0, min_dpi / 72.0)  # Если изображение меньше 300 DPI
+            if scale_factor > 1.0:
+                new_size = (int(original_size[0] * scale_factor), int(original_size[1] * scale_factor))
+                image = image.resize(new_size, Image.LANCZOS)
+                api_logger.info(f"   📐 Увеличено разрешение: {original_size} → {new_size}")
+            
+            # Метод 2: Улучшаем контраст (критически важно для видимого текста)
+            enhancer = ImageEnhance.Contrast(image)
+            image = enhancer.enhance(2.0)  # Увеличиваем контраст в 2 раза
+            api_logger.info("   🎨 Улучшен контраст")
+            
+            # Метод 3: Улучшаем резкость
+            enhancer = ImageEnhance.Sharpness(image)
+            image = enhancer.enhance(1.5)  # Увеличиваем резкость на 50%
+            api_logger.info("   ✨ Улучшена резкость")
+            
+            # Метод 4: Коррекция яркости для лучшего распознавания
+            enhancer = ImageEnhance.Brightness(image)
+            # Определяем среднюю яркость
+            pixels = list(image.getdata())
+            avg_brightness = sum(sum(pixel) / 3 for pixel in pixels) / len(pixels)
+            # Если слишком темное, осветляем; если слишком светлое, затемняем
+            if avg_brightness < 128:
+                image = enhancer.enhance(1.2)  # Осветляем
+                api_logger.info("   💡 Осветлено изображение")
+            elif avg_brightness > 200:
+                image = enhancer.enhance(0.9)  # Затемняем
+                api_logger.info("   🌙 Затемнено изображение")
+            
+            # Метод 5: Применяем фильтр для уменьшения шума
+            image = image.filter(ImageFilter.MedianFilter(size=3))
+            api_logger.info("   🧹 Применен фильтр для уменьшения шума")
+            
+            # Метод 6: Конвертируем в grayscale для лучшего OCR (если нужно)
+            # Tesseract работает лучше с grayscale для технических чертежей
+            if image.mode != 'L':
+                # Сохраняем RGB для цветных изображений, но можно попробовать и grayscale
+                # Для начала оставляем RGB, но добавляем метод конвертации в L (grayscale)
+                pass
+            
+            api_logger.info("   ✅ Preprocessing завершен")
+            return image
+            
+        except Exception as e:
+            api_logger.warning(f"   ⚠️ Ошибка в preprocessing: {e}, используем оригинальное изображение")
+            return image
+    
+    def _preprocess_image_advanced(self, image: Image.Image) -> Image.Image:
+        """
+        Расширенный preprocessing с бинаризацией для максимального качества OCR
+        Используется для сложных случаев, когда текст плохо виден
+        """
+        try:
+            api_logger.info("   🔬 Применяем расширенный preprocessing...")
+            
+            # Конвертируем в RGB
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            # Увеличиваем разрешение
+            original_size = image.size
+            scale_factor = max(2.0, 300 / 72.0)  # Минимум 2x для лучшего качества
+            new_size = (int(original_size[0] * scale_factor), int(original_size[1] * scale_factor))
+            image = image.resize(new_size, Image.LANCZOS)
+            
+            # Конвертируем в numpy array для обработки
+            if OPENCV_AVAILABLE and NUMPY_AVAILABLE:
+                import cv2
+                # Конвертируем PIL в numpy
+                img_array = np.array(image)
+                
+                # Конвертируем в grayscale
+                gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+                
+                # Применяем адаптивную бинаризацию (Оtsu или адаптивная)
+                # Это критически важно для чертежей с разным освещением
+                binary = cv2.adaptiveThreshold(
+                    gray, 255, 
+                    cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                    cv2.THRESH_BINARY, 
+                    11, 2
+                )
+                
+                # Улучшаем контраст еще раз
+                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+                binary = clahe.apply(binary)
+                
+                # Убираем шум
+                binary = cv2.medianBlur(binary, 3)
+                
+                # Конвертируем обратно в PIL
+                image = Image.fromarray(binary)
+                api_logger.info("   🔬 Применена адаптивная бинаризация (OpenCV)")
+            else:
+                # Fallback без OpenCV - используем PIL методы
+                image = image.convert('L')  # Grayscale
+                
+                # Применяем более агрессивную обработку
+                enhancer = ImageEnhance.Contrast(image)
+                image = enhancer.enhance(3.0)
+                
+                # Применяем threshold для бинаризации (черно-белое)
+                threshold = 128
+                image = image.point(lambda p: 255 if p > threshold else 0, mode='1')
+                image = image.convert('L')
+                api_logger.info("   🔬 Применена бинаризация (PIL)")
+            
+            return image
+            
+        except Exception as e:
+            api_logger.warning(f"   ⚠️ Ошибка в расширенном preprocessing: {e}")
+            return image
+    
     async def _extract_text_with_ocr_fallback(
         self,
         image_base64: str,
@@ -515,7 +655,7 @@ class OpenRouterService:
             if is_pdf:
                 api_logger.info("📄 Обнаружен PDF файл, пробуем извлечь текст...")
                 
-                # Метод 1: PyPDF2 для PDF с текстовым слоем
+                # Метод 1: PyPDF2 для PDF с текстовым слоем (улучшенная обработка русского текста)
                 if PYPDF2_AVAILABLE:
                     try:
                         api_logger.info("   Попытка 1: PyPDF2 (для PDF с текстом)...")
@@ -524,9 +664,27 @@ class OpenRouterService:
                         
                         for page_num, page in enumerate(pdf_reader.pages, 1):
                             try:
-                                page_text = page.extract_text()
-                                if page_text.strip():
-                                    text_parts.append(f"--- Страница {page_num} ---\n{page_text}")
+                                # Извлекаем текст с поддержкой кодировок
+                                # Используем layout=True для лучшего извлечения текста с сохранением структуры
+                                page_text = page.extract_text(layout=False)
+                                
+                                # Пробуем также с layout=True для сложных документов
+                                if not page_text or len(page_text.strip()) < 10:
+                                    page_text = page.extract_text(layout=True)
+                                
+                                # Улучшаем обработку русского текста
+                                if page_text:
+                                    # Очищаем текст, но сохраняем структуру
+                                    lines = []
+                                    for line in page_text.split('\n'):
+                                        cleaned_line = line.strip()
+                                        if cleaned_line:
+                                            lines.append(cleaned_line)
+                                    
+                                    if lines:
+                                        page_text = '\n'.join(lines)
+                                        text_parts.append(f"--- Страница {page_num} ---\n{page_text}")
+                                        
                             except Exception as e:
                                 api_logger.warning(f"   Ошибка извлечения текста со страницы {page_num}: {e}")
                                 continue
@@ -534,6 +692,7 @@ class OpenRouterService:
                         if text_parts:
                             full_text = "\n\n".join(text_parts)
                             api_logger.info(f"✅ PyPDF2 успешно извлек текст: {len(full_text)} символов")
+                            api_logger.info(f"   Превью: {full_text[:200]}...")
                             return full_text
                         else:
                             api_logger.warning("   PyPDF2 не нашел текста (возможно, сканированный PDF)")
@@ -545,9 +704,15 @@ class OpenRouterService:
                     try:
                         api_logger.info("   Попытка 2: pdf2image + Tesseract OCR (для сканированных PDF)...")
                         
-                        # Конвертируем PDF в изображения
-                        images = convert_from_bytes(image_data)
-                        api_logger.info(f"   PDF конвертирован в {len(images)} изображений")
+                        # Конвертируем PDF в изображения с высоким DPI для лучшего качества OCR
+                        # DPI 300 - оптимально для OCR, минимум для качественного распознавания
+                        images = convert_from_bytes(
+                            image_data,
+                            dpi=300,  # Высокое разрешение для лучшего OCR
+                            fmt='png',  # PNG для лучшего качества
+                            thread_count=4  # Параллельная обработка для скорости
+                        )
+                        api_logger.info(f"   PDF конвертирован в {len(images)} изображений (DPI 300)")
                         
                         # Маппинг языков для Tesseract
                         lang_map = {
@@ -559,9 +724,33 @@ class OpenRouterService:
                         text_parts = []
                         for page_num, img in enumerate(images, 1):
                             try:
-                                page_text = pytesseract.image_to_string(img, lang=tesseract_langs)
+                                # Применяем preprocessing для улучшения качества OCR
+                                api_logger.info(f"   Обработка страницы {page_num}/{len(images)}...")
+                                processed_img = self._preprocess_image_for_ocr(img)
+                                
+                                # Пробуем OCR с улучшенным изображением
+                                # PSM 6 = единый блок текста (хорошо для обычного текста)
+                                # OEM 3 = автоматический движок LSTM (лучший для русского)
+                                page_text = pytesseract.image_to_string(
+                                    processed_img, 
+                                    lang=tesseract_langs,
+                                    config='--psm 6 --oem 3'  # Базовые параметры для начала
+                                )
+                                
+                                # Если не получилось, пробуем расширенный preprocessing
+                                if not page_text.strip():
+                                    api_logger.info(f"   Попытка с расширенным preprocessing для страницы {page_num}...")
+                                    advanced_img = self._preprocess_image_advanced(img)
+                                    page_text = pytesseract.image_to_string(
+                                        advanced_img,
+                                        lang=tesseract_langs,
+                                        config='--psm 11 --oem 3'  # PSM 11 = разреженный текст для чертежей
+                                    )
+                                
                                 if page_text.strip():
-                                    text_parts.append(f"--- Страница {page_num} ---\n{page_text}")
+                                    # Очищаем и улучшаем извлеченный текст
+                                    cleaned_text = '\n'.join(line.strip() for line in page_text.split('\n') if line.strip())
+                                    text_parts.append(f"--- Страница {page_num} ---\n{cleaned_text}")
                             except Exception as e:
                                 api_logger.warning(f"   Ошибка OCR на странице {page_num}: {e}")
                                 continue
@@ -588,11 +777,35 @@ class OpenRouterService:
                         }
                         tesseract_langs = "+".join([lang_map.get(lang.lower(), "eng") for lang in languages])
                         
-                        text = pytesseract.image_to_string(image, lang=tesseract_langs)
+                        # Применяем preprocessing для улучшения качества OCR
+                        api_logger.info("   Применяем preprocessing изображения...")
+                        processed_image = self._preprocess_image_for_ocr(image)
+                        
+                        # Пробуем OCR с улучшенным изображением
+                        # PSM 6 = единый блок текста (хорошо для обычного текста)
+                        # OEM 3 = автоматический движок LSTM (лучший для русского)
+                        text = pytesseract.image_to_string(
+                            processed_image,
+                            lang=tesseract_langs,
+                            config='--psm 6 --oem 3'  # Базовые параметры для начала
+                        )
+                        
+                        # Если не получилось, пробуем расширенный preprocessing
+                        if not text.strip():
+                            api_logger.info("   Попытка с расширенным preprocessing...")
+                            advanced_image = self._preprocess_image_advanced(image)
+                            text = pytesseract.image_to_string(
+                                advanced_image,
+                                lang=tesseract_langs,
+                                config='--psm 11 --oem 3'  # PSM 11 = разреженный текст для чертежей
+                            )
                         
                         if text.strip():
-                            api_logger.info(f"✅ Tesseract успешно извлек текст: {len(text)} символов")
-                            return text
+                            # Очищаем и улучшаем извлеченный текст
+                            cleaned_text = '\n'.join(line.strip() for line in text.split('\n') if line.strip())
+                            api_logger.info(f"✅ Tesseract успешно извлек текст: {len(cleaned_text)} символов")
+                            api_logger.info(f"   Превью: {cleaned_text[:200]}...")
+                            return cleaned_text
                         else:
                             api_logger.warning("   Tesseract не нашел текста в изображении")
                     except Exception as e:
