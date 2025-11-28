@@ -272,7 +272,7 @@ class OCRSelectionAgent:
                 if not self.pdf2image_available:
                     raise ValueError("pdf2image не доступен для обработки PDF")
                 
-                images = convert_from_bytes(file_content, dpi=300, fmt='png')
+                images = convert_from_bytes(file_content, dpi=400, fmt='png')
                 all_text = []
                 
                 import numpy as np

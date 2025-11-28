@@ -110,8 +110,8 @@ class OCRService:
             if not self.pdf2image_available:
                 raise ValueError("pdf2image not available for PDF processing")
             
-            # Конвертируем с высоким DPI
-            images = convert_from_bytes(file_content, dpi=300, fmt='png')
+            # Конвертируем с высоким DPI для лучшего качества OCR технических чертежей
+            images = convert_from_bytes(file_content, dpi=400, fmt='png')
             all_text = []
             
             for img in images:
@@ -264,8 +264,8 @@ class OCRService:
                         if PDF2IMAGE_AVAILABLE:
                             try:
                                 from pdf2image import convert_from_bytes
-                                # Конвертируем первую страницу в изображение
-                                images = convert_from_bytes(file_content, dpi=300, first_page=1, last_page=1)
+                                # Конвертируем первую страницу в изображение с высоким DPI для лучшего OCR
+                                images = convert_from_bytes(file_content, dpi=400, first_page=1, last_page=1)
                                 if images:
                                     # Конвертируем изображение в base64
                                     img_buffer = io.BytesIO()

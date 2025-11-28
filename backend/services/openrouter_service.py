@@ -632,8 +632,8 @@ class OpenRouterService:
             
             # Метод 1: Увеличиваем разрешение (минимум 300 DPI для качественного OCR)
             original_size = image.size
-            min_dpi = 300
-            scale_factor = max(1.0, min_dpi / 72.0)  # Если изображение меньше 300 DPI
+            min_dpi = 400
+            scale_factor = max(1.0, min_dpi / 72.0)  # Если изображение меньше 400 DPI
             if scale_factor > 1.0:
                 new_size = (int(original_size[0] * scale_factor), int(original_size[1] * scale_factor))
                 image = image.resize(new_size, Image.LANCZOS)
@@ -843,14 +843,15 @@ class OpenRouterService:
                         api_logger.info("   Попытка 2: pdf2image + Tesseract OCR (для сканированных PDF)...")
                         
                         # Конвертируем PDF в изображения с высоким DPI для лучшего качества OCR
-                        # DPI 300 - оптимально для OCR, минимум для качественного распознавания
+                        # DPI 400 - увеличен для лучшего распознавания технических чертежей
+                        # Для технических чертежей нужно более высокое разрешение
                         images = convert_from_bytes(
                             image_data,
-                            dpi=300,  # Высокое разрешение для лучшего OCR
+                            dpi=400,  # Увеличенное разрешение для лучшего OCR технических чертежей
                             fmt='png',  # PNG для лучшего качества
                             thread_count=4  # Параллельная обработка для скорости
                         )
-                        api_logger.info(f"   PDF конвертирован в {len(images)} изображений (DPI 300)")
+                        api_logger.info(f"   PDF конвертирован в {len(images)} изображений (DPI 400)")
                         
                         # Маппинг языков для Tesseract
                         lang_map = {
