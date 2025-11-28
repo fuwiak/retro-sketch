@@ -1084,7 +1084,14 @@ els.processBtn.addEventListener("click", async () => {
           log(`📝 ${msg}`);
         };
         
-        ocrResult = await pdfProcessor.processPdfWithOCR(croppedFile, languages, progressCallback);
+        ocrResult = await pdfProcessor.processPdfWithOCR(
+          croppedFile, 
+          languages, 
+          progressCallback,
+          userSettings.ocrMethod || 'auto',
+          userSettings.ocrQuality || 'balanced',
+          currentAbortController ? currentAbortController.signal : null
+        );
         ocrResult.isCropped = true;
         addProgressSubStep('OCR Processing', `✅ OCR completed on cropped area`);
         addProgressSubStep('OCR Processing', `Model used: ${ocrResult.model || 'unknown'}`);
