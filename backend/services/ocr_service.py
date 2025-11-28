@@ -86,8 +86,25 @@ class OCRService:
             if self.openrouter_service:
                 image = self.openrouter_service._preprocess_image_for_ocr(image)
             
-            text = pytesseract.image_to_string(image, lang=tesseract_langs, config='--psm 6 --oem 3')
-            return text
+            # Пробуем разные PSM режимы для технических чертежей
+            # PSM 11 - разреженный текст (хорошо для чертежей)
+            # PSM 6 - единый блок текста
+            # PSM 4 - одна колонка текста
+            text = ""
+            for psm_mode in [11, 6, 4]:
+                try:
+                    text = pytesseract.image_to_string(
+                        image, 
+                        lang=tesseract_langs, 
+                        config=f'--psm {psm_mode} --oem 3'
+                    )
+                    if text and len(text.strip()) > 10:
+                        ocr_logger.info(f"   ✅ Tesseract успешно извлек текст с PSM {psm_mode}")
+                        break
+                except:
+                    continue
+            
+            return text if text else pytesseract.image_to_string(image, lang=tesseract_langs, config='--psm 6 --oem 3')
         else:
             # Process PDF - convert to images first
             if not self.pdf2image_available:
@@ -102,7 +119,24 @@ class OCRService:
                 if self.openrouter_service:
                     img = self.openrouter_service._preprocess_image_for_ocr(img)
                 
-                text = pytesseract.image_to_string(img, lang=tesseract_langs, config='--psm 6 --oem 3')
+                # Пробуем разные PSM режимы для технических чертежей
+                text = ""
+                for psm_mode in [11, 6, 4]:
+                    try:
+                        text = pytesseract.image_to_string(
+                            img, 
+                            lang=tesseract_langs, 
+                            config=f'--psm {psm_mode} --oem 3'
+                        )
+                        if text and len(text.strip()) > 10:
+                            ocr_logger.info(f"   ✅ Tesseract успешно извлек текст со страницы {len(all_text)+1} с PSM {psm_mode}")
+                            break
+                    except:
+                        continue
+                
+                if not text:
+                    text = pytesseract.image_to_string(img, lang=tesseract_langs, config='--psm 6 --oem 3')
+                
                 all_text.append(text)
             
             return "\n\n--- Page Break ---\n\n".join(all_text)
@@ -315,39 +349,43 @@ class OCRService:
                         ocr_text = None
         
         # Проверяем результат
+        actual_time = time.time() - start_time
+        processing_info["actual_time"] = actual_time
+        
         if not ocr_text or len(ocr_text.strip()) == 0:
             ocr_logger.error("❌ Все методы не смогли извлечь текст!")
+            ocr_logger.error(f"   Метод: {selected_method.value}, Тип PDF: {pdf_type.value if pdf_type else 'unknown'}")
+            ocr_logger.error(f"   OpenRouter доступен: {self.openrouter_service and self.openrouter_service.is_available()}")
+            ocr_logger.error(f"   Tesseract доступен: {self.tesseract_available}")
+            ocr_logger.error(f"   PDF2Image доступен: {self.pdf2image_available}")
             raise Exception("OCR processing failed: все методы (OpenRouter, PyPDF2, Tesseract) не смогли извлечь текст")
-            
-            actual_time = time.time() - start_time
-            processing_info["actual_time"] = actual_time
-            
-            ocr_logger.info(
-                f"OCR completed - Method: {processing_info['method']}, "
-                f"Time: {actual_time:.2f}s, "
-                f"Text length: {len(ocr_text)} chars, "
-                f"Pages: {pages}"
-            )
-            
-            # Log success
-            log_ocr_result(
-                method=processing_info["method"],
-                success=True,
-                time_taken=actual_time,
-                pages=pages
-            )
-            
-            return {
-                "text": ocr_text,
-                "file_type": "image" if is_image else "pdf",
-                "pages": pages,
-                "metadata": {
-                    "languages": languages,
-                    "file_type": file_type,
-                    "method_used": processing_info["method"]
-                },
-                "processing_info": processing_info
-            }
+        
+        ocr_logger.info(
+            f"OCR completed - Method: {processing_info['method']}, "
+            f"Time: {actual_time:.2f}s, "
+            f"Text length: {len(ocr_text)} chars, "
+            f"Pages: {pages}"
+        )
+        
+        # Log success
+        log_ocr_result(
+            method=processing_info["method"],
+            success=True,
+            time_taken=actual_time,
+            pages=pages
+        )
+        
+        return {
+            "text": ocr_text,
+            "file_type": "image" if is_image else "pdf",
+            "pages": pages,
+            "metadata": {
+                "languages": languages,
+                "file_type": file_type,
+                "method_used": processing_info["method"]
+            },
+            "processing_info": processing_info
+        }
     
     async def process_image(
         self,

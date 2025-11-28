@@ -121,8 +121,16 @@ async def process_ocr(
             ocr_quality=ocr_quality
         )
         
-        # Проверяем, что результат валиден
+        # Проверяем, что результат валиден и содержит текст
         if not result:
+            raise HTTPException(
+                status_code=500,
+                detail="OCR processing failed: service returned empty result. Используется только OpenRouter + OCR fallback'и."
+            )
+        
+        # Проверяем, что текст не пустой
+        result_text = result.get("text", "") if isinstance(result, dict) else ""
+        if not result_text or len(result_text.strip()) == 0:
             raise HTTPException(
                 status_code=500,
                 detail="OCR processing failed: service returned empty result. Используется только OpenRouter + OCR fallback'и."

@@ -867,28 +867,55 @@ class OpenRouterService:
                                 processed_img = self._preprocess_image_for_ocr(img)
                                 
                                 # Пробуем OCR с улучшенным изображением
-                                # PSM 6 = единый блок текста (хорошо для обычного текста)
-                                # OEM 3 = автоматический движок LSTM (лучший для русского)
-                                page_text = pytesseract.image_to_string(
-                                    processed_img, 
-                                    lang=tesseract_langs,
-                                    config='--psm 6 --oem 3'  # Базовые параметры для начала
-                                )
+                                # Для технических чертежей пробуем разные PSM режимы
+                                page_text = ""
+                                for psm_mode in [11, 6, 4, 12]:
+                                    try:
+                                        page_text = pytesseract.image_to_string(
+                                            processed_img, 
+                                            lang=tesseract_langs,
+                                            config=f'--psm {psm_mode} --oem 3'
+                                        )
+                                        if page_text and len(page_text.strip()) > 10:
+                                            api_logger.info(f"   ✅ Страница {page_num}: Tesseract PSM {psm_mode} успешно извлек текст ({len(page_text)} символов)")
+                                            break
+                                    except Exception as e:
+                                        api_logger.debug(f"   PSM {psm_mode} не сработал: {e}")
+                                        continue
                                 
                                 # Если не получилось, пробуем расширенный preprocessing
-                                if not page_text.strip():
+                                if not page_text or len(page_text.strip()) < 10:
                                     api_logger.info(f"   Попытка с расширенным preprocessing для страницы {page_num}...")
                                     advanced_img = self._preprocess_image_advanced(img)
+                                    for psm_mode in [11, 6, 4]:
+                                        try:
+                                            page_text = pytesseract.image_to_string(
+                                                advanced_img,
+                                                lang=tesseract_langs,
+                                                config=f'--psm {psm_mode} --oem 3'
+                                            )
+                                            if page_text and len(page_text.strip()) > 10:
+                                                api_logger.info(f"   ✅ Страница {page_num}: Tesseract с расширенным preprocessing PSM {psm_mode} успешно извлек текст")
+                                                break
+                                        except:
+                                            continue
+                                
+                                # Если все еще пусто, пробуем базовый режим
+                                if not page_text or len(page_text.strip()) < 10:
                                     page_text = pytesseract.image_to_string(
-                                        advanced_img,
+                                        processed_img,
                                         lang=tesseract_langs,
-                                        config='--psm 11 --oem 3'  # PSM 11 = разреженный текст для чертежей
+                                        config='--psm 6 --oem 3'
                                     )
                                 
-                                if page_text.strip():
+                                if page_text and len(page_text.strip()) >= 5:
                                     # Очищаем и улучшаем извлеченный текст
                                     cleaned_text = '\n'.join(line.strip() for line in page_text.split('\n') if line.strip())
-                                    text_parts.append(f"--- Страница {page_num} ---\n{cleaned_text}")
+                                    if cleaned_text:
+                                        text_parts.append(f"--- Страница {page_num} ---\n{cleaned_text}")
+                                        api_logger.info(f"   ✅ Страница {page_num}: Извлечено {len(cleaned_text)} символов")
+                                else:
+                                    api_logger.warning(f"   ⚠️ Страница {page_num}: Не удалось извлечь текст (результат пустой или слишком короткий)")
                             except Exception as e:
                                 api_logger.warning(f"   Ошибка OCR на странице {page_num}: {e}")
                                 continue
@@ -919,33 +946,56 @@ class OpenRouterService:
                         api_logger.info("   Применяем preprocessing изображения...")
                         processed_image = self._preprocess_image_for_ocr(image)
                         
-                        # Пробуем OCR с улучшенным изображением
-                        # PSM 6 = единый блок текста (хорошо для обычного текста)
-                        # OEM 3 = автоматический движок LSTM (лучший для русского)
-                        text = pytesseract.image_to_string(
-                            processed_image,
-                            lang=tesseract_langs,
-                            config='--psm 6 --oem 3'  # Базовые параметры для начала
-                        )
+                        # Пробуем OCR с улучшенным изображением - множественные попытки с разными PSM режимами
+                        text = ""
+                        for psm_mode in [11, 6, 4, 12]:
+                            try:
+                                text = pytesseract.image_to_string(
+                                    processed_image,
+                                    lang=tesseract_langs,
+                                    config=f'--psm {psm_mode} --oem 3'
+                                )
+                                if text and len(text.strip()) >= 10:
+                                    api_logger.info(f"   ✅ Tesseract PSM {psm_mode} успешно извлек текст из изображения ({len(text)} символов)")
+                                    break
+                            except Exception as e:
+                                api_logger.debug(f"   PSM {psm_mode} не сработал: {e}")
+                                continue
                         
                         # Если не получилось, пробуем расширенный preprocessing
-                        if not text.strip():
+                        if not text or len(text.strip()) < 10:
                             api_logger.info("   Попытка с расширенным preprocessing...")
                             advanced_image = self._preprocess_image_advanced(image)
+                            for psm_mode in [11, 6, 4]:
+                                try:
+                                    text = pytesseract.image_to_string(
+                                        advanced_image,
+                                        lang=tesseract_langs,
+                                        config=f'--psm {psm_mode} --oem 3'
+                                    )
+                                    if text and len(text.strip()) >= 10:
+                                        api_logger.info(f"   ✅ Tesseract с расширенным preprocessing PSM {psm_mode} успешно извлек текст")
+                                        break
+                                except:
+                                    continue
+                        
+                        # Если все еще пусто, пробуем базовый режим
+                        if not text or len(text.strip()) < 10:
                             text = pytesseract.image_to_string(
-                                advanced_image,
+                                processed_image,
                                 lang=tesseract_langs,
-                                config='--psm 11 --oem 3'  # PSM 11 = разреженный текст для чертежей
+                                config='--psm 6 --oem 3'
                             )
                         
-                        if text.strip():
+                        if text and len(text.strip()) >= 5:
                             # Очищаем и улучшаем извлеченный текст
                             cleaned_text = '\n'.join(line.strip() for line in text.split('\n') if line.strip())
-                            api_logger.info(f"✅ Tesseract успешно извлек текст: {len(cleaned_text)} символов")
-                            api_logger.info(f"   Превью: {cleaned_text[:200]}...")
-                            return cleaned_text
-                        else:
-                            api_logger.warning("   Tesseract не нашел текста в изображении")
+                            if cleaned_text:
+                                api_logger.info(f"✅ Tesseract успешно извлек текст: {len(cleaned_text)} символов")
+                                api_logger.info(f"   Превью: {cleaned_text[:200]}...")
+                                return cleaned_text
+                        
+                        api_logger.warning("   ⚠️ Tesseract не нашел текста в изображении (результат пустой или слишком короткий)")
                     except Exception as e:
                         api_logger.error(f"   Tesseract OCR не сработал: {e}")
             
