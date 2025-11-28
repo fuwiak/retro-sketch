@@ -196,13 +196,33 @@ class OCRService:
             except:
                 pass
         
-        # Выбираем метод OCR через AI агента
-        selected_method = self.agent.select_ocr_method(
-            pdf_type=pdf_type if pdf_type else PDFType.RASTER,
-            user_method=ocr_method,
-            quality=ocr_quality
-        )
-        ocr_logger.info(f"🎯 Выбранный метод OCR: {selected_method.value}")
+        # Для изображений используем более быстрые методы по умолчанию
+        if is_image:
+            # Для изображений приоритет - быстрые локальные методы или быстрые модели
+            if ocr_method == "auto":
+                # Для изображений автоматически выбираем быстрый метод
+                if ocr_quality == "fast":
+                    selected_method = OCRMethod.TESSERACT
+                elif ocr_quality == "accurate":
+                    selected_method = OCRMethod.OPENROUTER_AUTO
+                else:  # balanced
+                    # Сначала пробуем Tesseract (быстро), если не сработает - OpenRouter
+                    selected_method = OCRMethod.TESSERACT
+            else:
+                # Используем выбранный пользователем метод
+                try:
+                    selected_method = OCRMethod(ocr_method)
+                except ValueError:
+                    selected_method = OCRMethod.TESSERACT
+            ocr_logger.info(f"🖼️ Для изображения выбран метод: {selected_method.value} (quality: {ocr_quality})")
+        else:
+            # Для PDF используем стандартную логику
+            selected_method = self.agent.select_ocr_method(
+                pdf_type=pdf_type if pdf_type else PDFType.RASTER,
+                user_method=ocr_method,
+                quality=ocr_quality
+            )
+            ocr_logger.info(f"🎯 Выбранный метод OCR: {selected_method.value}")
         
         processing_info = {
             "method": selected_method.value,
@@ -254,8 +274,49 @@ class OCRService:
             except Exception as e:
                 ocr_logger.error(f"❌ Tesseract не сработал: {e}")
         
-        # Для OpenRouter методов
-        if not ocr_text and selected_method in [OCRMethod.OPENROUTER_OLMOCR, OCRMethod.OPENROUTER_GOTOCR, OCRMethod.OPENROUTER_MISTRAL, OCRMethod.OPENROUTER_AUTO]:
+        # Для изображений: сначала пробуем локальные методы, OpenRouter - только если не сработали
+        if is_image and not ocr_text:
+            # Для изображений приоритет - локальные OCR методы для скорости
+            ocr_logger.info("🖼️ Для изображения пробуем локальные OCR методы для ускорения...")
+            
+            # Пробуем Tesseract (самый быстрый)
+            if TESSERACT_AVAILABLE:
+                try:
+                    ocr_logger.info("🔧 Пробуем Tesseract для изображения...")
+                    ocr_text = await self._process_with_tesseract(file_content, file_type, languages)
+                    if ocr_text and len(ocr_text.strip()) > 10:
+                        ocr_logger.info(f"✅ Tesseract успешно извлек текст из изображения: {len(ocr_text)} символов")
+                        processing_info["method"] = "tesseract"
+                        processing_info["fallback_used"] = False
+                except Exception as e:
+                    ocr_logger.warning(f"⚠️ Tesseract не сработал для изображения: {e}")
+            
+            # Если Tesseract не сработал, пробуем OpenRouter (только для изображений)
+            if not ocr_text or len(ocr_text.strip()) <= 10:
+                ocr_logger.info("🔄 Tesseract не дал результата, пробуем OpenRouter для изображения...")
+                if self.openrouter_service and self.openrouter_service.is_available():
+                    try:
+                        ocr_logger.info("🎯 Извлечение текста из изображения через OpenRouter...")
+                        openrouter_start = time.time()
+                        file_b64 = base64.b64encode(file_content).decode("utf-8")
+                        
+                        # Используем быстрые модели для изображений
+                        ocr_text = await self.openrouter_service.extract_text_from_image(
+                            image_base64=file_b64,
+                            languages=languages,
+                            model="qwen/qwen2.5-vl-32b-instruct"  # Быстрая модель для изображений
+                        )
+                        
+                        openrouter_time = time.time() - openrouter_start
+                        if ocr_text and len(ocr_text.strip()) > 10:
+                            processing_info["method"] = "openrouter"
+                            processing_info["openrouter_time"] = openrouter_time
+                            ocr_logger.info(f"✅ OpenRouter успешно извлек текст из изображения: {len(ocr_text)} символов за {openrouter_time:.2f}s")
+                    except Exception as e:
+                        ocr_logger.warning(f"⚠️ OpenRouter не сработал для изображения: {e}")
+        
+        # Для OpenRouter методов (только для PDF или если явно выбран OpenRouter)
+        if not ocr_text and not is_image and selected_method in [OCRMethod.OPENROUTER_OLMOCR, OCRMethod.OPENROUTER_GOTOCR, OCRMethod.OPENROUTER_MISTRAL, OCRMethod.OPENROUTER_AUTO]:
             # ШАГ 1: Пробуем OpenRouter (если доступен)
             if self.openrouter_service and self.openrouter_service.is_available():
                 try:

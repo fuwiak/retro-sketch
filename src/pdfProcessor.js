@@ -188,17 +188,119 @@ export async function renderPdfPreview(file, canvas) {
 /**
  * Upload PDF or image and process with OCR via backend API
  */
+/**
+ * Optimize image file - compress and resize if needed
+ * Returns optimized File object ready for OCR
+ */
+async function optimizeImageForOCR(file) {
+  if (!file.type || !file.type.startsWith('image/')) {
+    return file; // Not an image, return as-is
+  }
+  
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      img.onload = () => {
+        // Определяем максимальный размер для OCR (достаточно для качества, но быстро)
+        const MAX_DIMENSION = 2048; // Максимальная сторона
+        const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB максимальный размер файла
+        
+        let width = img.width;
+        let height = img.height;
+        let scale = 1;
+        
+        // Масштабируем если изображение слишком большое
+        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+          scale = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        
+        // Создаем canvas для оптимизации
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        
+        // Рисуем изображение с масштабированием
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Конвертируем в blob с оптимальным качеством
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            resolve(file); // Если не удалось, возвращаем оригинал
+            return;
+          }
+          
+          // Если файл все еще большой, сжимаем сильнее
+          if (blob.size > MAX_FILE_SIZE) {
+            // Повторное сжатие с меньшим качеством
+            canvas.toBlob((compressedBlob) => {
+              if (compressedBlob && compressedBlob.size <= MAX_FILE_SIZE * 1.5) {
+                const optimizedFile = new File([compressedBlob], file.name, { 
+                  type: file.type || 'image/jpeg' 
+                });
+                resolve(optimizedFile);
+              } else {
+                resolve(file); // Возвращаем оригинал если сжатие не помогло
+              }
+            }, file.type || 'image/jpeg', 0.75); // Качество 75%
+          } else {
+            const optimizedFile = new File([blob], file.name, { 
+              type: file.type || 'image/jpeg' 
+            });
+            resolve(optimizedFile);
+          }
+        }, file.type || 'image/jpeg', 0.85); // Качество 85% для OCR
+      };
+      
+      img.onerror = () => {
+        resolve(file); // Если ошибка загрузки, возвращаем оригинал
+      };
+      
+      img.src = e.target.result;
+    };
+    
+    reader.onerror = () => {
+      resolve(file); // При ошибке чтения возвращаем оригинал
+    };
+    
+    reader.readAsDataURL(file);
+  });
+}
+
 export async function processPdfWithOCR(file, languages = ['rus'], progressCallback = null, ocrMethod = 'auto', ocrQuality = 'balanced', abortSignal = null) {
   let progressTimer = null; // Объявляем на уровне функции для доступа в catch
   
   try {
+    // Optimize image files before sending
+    let fileToProcess = file;
+    const isImage = file.type && file.type.startsWith('image/');
+    
+    if (isImage) {
+      if (progressCallback) {
+        progressCallback(`Оптимизация изображения для OCR...`);
+      }
+      fileToProcess = await optimizeImageForOCR(file);
+      
+      if (progressCallback) {
+        const originalSize = (file.size / 1024).toFixed(1);
+        const optimizedSize = (fileToProcess.size / 1024).toFixed(1);
+        if (fileToProcess.size < file.size) {
+          progressCallback(`✓ Изображение оптимизировано: ${originalSize} KB → ${optimizedSize} KB`);
+        }
+      }
+    }
+    
     // Always use backend API endpoint
     if (progressCallback) {
       progressCallback(`Sending file to backend API...`);
     }
     
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', fileToProcess);
     formData.append('languages', languages.join('+'));
     formData.append('ocr_method', ocrMethod);
     formData.append('ocr_quality', ocrQuality);
