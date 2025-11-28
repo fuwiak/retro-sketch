@@ -99,7 +99,7 @@ button:focus-visible {
   --ui-color: #0048ff;
 }
 body {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
   background: #000;
   color: var(--ui-color);
 }
