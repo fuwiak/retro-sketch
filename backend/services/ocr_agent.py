@@ -98,9 +98,9 @@ class OCRSelectionAgent:
                             if page_text and len(page_text.strip()) > 50:  # Минимум 50 символов
                                 total_text_length += len(page_text)
                                 pages_with_text += 1
-        except:
-            pass
-        
+                        except:
+                            pass
+                    
                     total_pages = len(pdf_reader.pages)
                     
                     if total_pages == 0:
