@@ -384,6 +384,23 @@ class CloudService:
         """Download file from URL"""
         try:
             api_logger.info(f"Downloading file: {url}")
+            
+            # Если URL уже является API endpoint, используем его напрямую
+            if '/api/v2/file/download' in url:
+                api_logger.info("URL is already an API endpoint, using it directly")
+                response = self.session.get(url, timeout=30, stream=True, allow_redirects=True)
+                response.raise_for_status()
+                content = response.content
+                
+                # Проверяем, что это файл, а не HTML
+                if len(content) > 4:
+                    first_bytes = content[:4]
+                    if not (first_bytes[0:2] == b'<!' or b'<html' in content[:100].lower()):
+                        return content
+                    else:
+                        api_logger.warning("API endpoint returned HTML instead of file")
+            
+            # Обычная загрузка через URL
             response = self.session.get(url, timeout=30, stream=True, allow_redirects=True)
             response.raise_for_status()
             
