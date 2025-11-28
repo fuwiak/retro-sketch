@@ -702,7 +702,7 @@ function drawPolygon() {
     
     // Point number
     ctx.fillStyle = uiColor;
-    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif';
+    ctx.font = 'bold 12px "SF Mono", "Monaco", "Menlo", "Courier New", monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(String(index + 1), point.x, point.y);
@@ -938,7 +938,7 @@ els.pdfCanvas.addEventListener("mousemove", (e) => {
       
       // Point number
       ctx.fillStyle = uiColor;
-      ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif';
+      ctx.font = 'bold 12px "SF Mono", "Monaco", "Menlo", "Courier New", monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(String(index + 1), point.x, point.y);
