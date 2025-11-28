@@ -30,11 +30,9 @@ try:
 except ImportError:
     PDF2IMAGE_AVAILABLE = False
 
-try:
-    from paddleocr import PaddleOCR
-    PADDLEOCR_AVAILABLE = True
-except ImportError:
-    PADDLEOCR_AVAILABLE = False
+# PaddleOCR опционален - импорт будет ленивым (только при использовании)
+# Не импортируем на уровне модуля, так как он может требовать OpenCV
+PADDLEOCR_AVAILABLE = None  # None означает "еще не проверяли"
 
 
 class PDFType(Enum):
@@ -69,21 +67,14 @@ class OCRSelectionAgent:
     
     def __init__(self, openrouter_service=None):
         self.openrouter_service = openrouter_service
-        self.paddleocr_available = PADDLEOCR_AVAILABLE
+        self.paddleocr_available = False  # Будет проверено лениво
         self.tesseract_available = TESSERACT_AVAILABLE
         self.pypdf2_available = PYPDF2_AVAILABLE
         self.pdf2image_available = PDF2IMAGE_AVAILABLE
         
-        # Инициализируем PaddleOCR если доступен
+        # PaddleOCR будет инициализирован лениво (только при использовании)
+        # чтобы избежать импорта OpenCV при загрузке модуля
         self.paddleocr_instance = None
-        if self.paddleocr_available:
-            try:
-                # Поддержка русского и английского
-                self.paddleocr_instance = PaddleOCR(use_angle_cls=True, lang='en+ru', use_gpu=False)
-                ocr_logger.info("✅ PaddleOCR инициализирован (rus+eng)")
-            except Exception as e:
-                ocr_logger.warning(f"⚠️ Не удалось инициализировать PaddleOCR: {e}")
-                self.paddleocr_available = False
     
     async def detect_pdf_type(self, file_content: bytes) -> PDFType:
         """
@@ -107,9 +98,9 @@ class OCRSelectionAgent:
                             if page_text and len(page_text.strip()) > 50:  # Минимум 50 символов
                                 total_text_length += len(page_text)
                                 pages_with_text += 1
-                        except:
-                            pass
-                    
+        except:
+            pass
+        
                     total_pages = len(pdf_reader.pages)
                     
                     if total_pages == 0:
@@ -235,8 +226,24 @@ class OCRSelectionAgent:
         languages: List[str]
     ) -> Optional[str]:
         """
-        Обработка с помощью PaddleOCR
+        Обработка с помощью PaddleOCR (ленивая инициализация)
         """
+        # Ленивая инициализация PaddleOCR (только при использовании)
+        if self.paddleocr_instance is None:
+            try:
+                # Пробуем импортировать и инициализировать PaddleOCR
+                from paddleocr import PaddleOCR
+                # Поддержка русского и английского
+                self.paddleocr_instance = PaddleOCR(use_angle_cls=True, lang='en+ru', use_gpu=False)
+                self.paddleocr_available = True
+                ocr_logger.info("✅ PaddleOCR инициализирован (rus+eng)")
+            except (ImportError, OSError, Exception) as e:
+                # OSError может возникнуть если OpenCV не может загрузиться (libGL.so.1)
+                self.paddleocr_available = False
+                self.paddleocr_instance = None
+                ocr_logger.warning(f"⚠️ PaddleOCR недоступен: {e}")
+                raise ValueError(f"PaddleOCR не доступен: {e}")
+        
         if not self.paddleocr_available or not self.paddleocr_instance:
             raise ValueError("PaddleOCR не доступен")
         

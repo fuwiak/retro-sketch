@@ -38,17 +38,9 @@ try:
 except ImportError:
     NUMPY_AVAILABLE = False
 
-# OpenCV опционален - используется только для улучшения качества OCR
-OPENCV_AVAILABLE = False
-try:
-    import cv2
-    # Проверяем, что cv2 действительно работает (не только импортируется)
-    _ = cv2.__version__
-    OPENCV_AVAILABLE = True
-except (ImportError, AttributeError, OSError) as e:
-    # OSError может возникнуть если отсутствуют системные библиотеки (libGL.so.1)
-    OPENCV_AVAILABLE = False
-    api_logger.debug(f"OpenCV недоступен: {e}")
+# OpenCV опционален - проверка будет ленивой (только при использовании)
+# Не импортируем на уровне модуля, чтобы избежать ошибок при загрузке
+OPENCV_AVAILABLE = None  # None означает "еще не проверяли"
 
 try:
     from pdf2image import convert_from_bytes
@@ -593,15 +585,28 @@ class OpenRouterService:
             image = image.resize(new_size, Image.LANCZOS)
             
             # Конвертируем в numpy array для обработки
-            if OPENCV_AVAILABLE and NUMPY_AVAILABLE:
-                try:
-                    import cv2
-                    import numpy as np
-                    # Конвертируем PIL в numpy
-                    img_array = np.array(image)
-                    
-                    # Конвертируем в grayscale
-                    gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+            # Ленивая проверка OpenCV - только при использовании
+            if NUMPY_AVAILABLE:
+                # Проверяем доступность OpenCV только здесь
+                if OPENCV_AVAILABLE is None:
+                    try:
+                        import cv2
+                        _ = cv2.__version__
+                        global OPENCV_AVAILABLE
+                        OPENCV_AVAILABLE = True
+                    except (ImportError, AttributeError, OSError) as e:
+                        OPENCV_AVAILABLE = False
+                        api_logger.debug(f"OpenCV недоступен: {e}")
+                
+                if OPENCV_AVAILABLE:
+                    try:
+                        import cv2
+                        import numpy as np
+                        # Конвертируем PIL в numpy
+                        img_array = np.array(image)
+                        
+                        # Конвертируем в grayscale
+                        gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
                     
                     # Применяем адаптивную бинаризацию (Оtsu или адаптивная)
                     # Это критически важно для чертежей с разным освещением
