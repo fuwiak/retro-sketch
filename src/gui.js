@@ -2338,22 +2338,30 @@ async function loadFileFromCloud(url, fileName) {
     } 
     // Handle image files (convert to PDF-like canvas)
     // Проверяем реальный тип файла по сигнатуре, а не только по расширению
-    // Только если это действительно изображение и НЕ PDF
-    else if ((actualIsImage && !actualIsPdf) || (!actualIsPdf && fileName.match(/\.(png|jpg|jpeg)$/i))) {
-      // Определяем MIME тип из имени файла или из blob
-      let mimeType = blob.type || (fileName.match(/\.png$/i) ? 'image/png' : 
-                                   fileName.match(/\.jpe?g$/i) ? 'image/jpeg' : 'image/png');
+    // Только если это действительно изображение и НЕ PDF по сигнатуре
+    else if (!actualIsPdf && (actualIsImage || fileName.match(/\.(png|jpg|jpeg)$/i))) {
+      // Если файл по расширению изображение, но сигнатура PDF - это уже обработано выше
+      // Здесь обрабатываем только реальные изображения
       
-      // Если blob.type пустой или неправильный, используем определение из расширения
+      // Определяем MIME тип из реальной сигнатуры, а не только из имени файла
+      let mimeType;
+      if (isPngBySignature) {
+        mimeType = 'image/png';
+      } else if (isJpegBySignature) {
+        mimeType = 'image/jpeg';
+      } else {
+        // Fallback на определение по расширению или из blob
+        mimeType = blob.type || (fileName.match(/\.png$/i) ? 'image/png' : 
+                                 fileName.match(/\.jpe?g$/i) ? 'image/jpeg' : 'image/png');
+      }
+      
+      // Если blob.type пустой или неправильный, используем определенный MIME тип
       if (!blob.type || blob.type === 'application/octet-stream') {
-        mimeType = fileName.match(/\.png$/i) ? 'image/png' : 
-                   fileName.match(/\.jpe?g$/i) ? 'image/jpeg' : 'image/png';
-        
         // Создаем новый blob с правильным MIME типом
         blob = new Blob([blob], { type: mimeType });
       }
       
-      console.log(`Loading image: ${fileName}, MIME type: ${mimeType}, Blob size: ${blob.size} bytes`);
+      console.log(`Loading image: ${fileName}, MIME type: ${mimeType}, Blob size: ${blob.size} bytes, Signature: PNG=${isPngBySignature}, JPEG=${isJpegBySignature}`);
       
       // Создаем File объект для изображения
       const file = new File([blob], fileName, { type: mimeType });
