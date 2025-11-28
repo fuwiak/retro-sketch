@@ -215,20 +215,28 @@ export async function processPdfWithOCR(file, languages = ['rus'], progressCallb
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+      const errorMessage = errorData.detail || errorData.message || `HTTP ${response.status}: ${response.statusText}`;
+      throw new Error(errorMessage);
     }
     
     if (progressCallback) {
-      progressCallback(`Processing response from backend...`);
+      progressCallback(`Обработка ответа от backend...`);
     }
     
     const result = await response.json();
     
+    // Проверяем, что результат валиден
+    if (!result) {
+      throw new Error("Backend вернул пустой ответ");
+    }
+    
     if (progressCallback && result.processing_info) {
       const info = result.processing_info;
-      progressCallback(`Method used: ${info.method_used}`);
-      progressCallback(`Actual time: ${info.actual_time?.toFixed(2) || 'N/A'}s`);
-      progressCallback(`Reasoning: ${info.reasoning}`);
+      progressCallback(`Метод: ${info.method_used || info.method || 'unknown'}`);
+      progressCallback(`Время: ${info.actual_time?.toFixed(2) || 'N/A'}s`);
+      if (info.reasoning) {
+        progressCallback(`Причина: ${info.reasoning}`);
+      }
     }
     
     // Convert backend response to frontend format
@@ -237,35 +245,20 @@ export async function processPdfWithOCR(file, languages = ['rus'], progressCallb
       confidence: 0.9,
       language: languages.join('+'),
       pages: result.pages || 1,
-      model: result.processing_info?.method_used || 'backend',
+      model: result.processing_info?.method_used || result.processing_info?.method || 'backend',
       isCropped: file.type && file.type.startsWith('image/'),
-      processing_info: result.processing_info
+      processing_info: result.processing_info || {}
     };
   } catch (error) {
     console.error('OCR processing error:', error);
     
-    // Don't fallback to direct Groq if backend error is due to missing API key
-    // This prevents infinite recursion and stack overflow
-    if (error.message && error.message.includes('Groq API key not configured')) {
-      throw new Error(`OCR processing failed: ${error.message}. Please configure GROQ_API_KEY in backend environment.`);
-    }
-    
-    // Fallback: try direct Groq if backend fails (only for non-config errors)
+    // Groq полностью отключен - используется только OpenRouter + OCR fallback'и
+    // Если backend не сработал, возвращаем ошибку без fallback на Groq
     if (progressCallback) {
-      progressCallback(`Backend failed, trying direct Groq API...`);
+      progressCallback(`❌ Backend OCR failed: ${error.message}`);
     }
     
-    try {
-      const { processPdfOCR, processImageOCR } = await import('./groqAgent.js');
-      
-      if (file.type && file.type.startsWith('image/')) {
-        return await processImageOCR(file, languages, progressCallback);
-      } else {
-        return await processPdfOCR(file, languages, progressCallback);
-      }
-    } catch (fallbackError) {
-      throw new Error(`OCR processing failed: ${error.message}. Backend unavailable and Groq fallback also failed: ${fallbackError.message}`);
-    }
+    throw new Error(`OCR processing failed: ${error.message}. Используется только OpenRouter + OCR fallback'и. Groq отключен.`);
   }
 }
 

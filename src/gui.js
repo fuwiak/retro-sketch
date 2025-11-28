@@ -1017,17 +1017,13 @@ els.processBtn.addEventListener("click", async () => {
         // Create a temporary file-like object for cropped image
         updateProgress('OCR Processing', 'active', `Sending cropped image to OCR engine...`);
         addProgressSubStep('OCR Processing', `Converting to blob format...`);
-        log(`📤 Sending cropped image to Groq AI OCR...`);
+        log(`📤 Отправляем вырезанное изображение в OCR...`);
         const croppedBlob = await fetch(croppedImage).then(r => r.blob());
         const croppedFile = new File([croppedBlob], 'cropped-area.png', { type: 'image/png' });
-        addProgressSubStep('OCR Processing', `File created: ${(croppedBlob.size / 1024).toFixed(1)} KB`);
+        addProgressSubStep('OCR Processing', `Файл создан: ${(croppedBlob.size / 1024).toFixed(1)} KB`);
         
-        updateProgress('OCR Processing', 'active', `Analyzing image with AI vision models...`);
-        addProgressSubStep('OCR Processing', `Calling Groq AI API...`);
-        // Import OCR_MODELS for display
-        const { OCR_MODELS } = await import('./groqAgent.js');
-        log(`🤖 Calling Groq AI with vision models: ${OCR_MODELS.join(', ')}`);
-        addProgressSubStep('OCR Processing', `Models: ${OCR_MODELS.join(', ')}`);
+        updateProgress('OCR Processing', 'active', `Анализируем изображение с помощью OpenRouter...`);
+        addProgressSubStep('OCR Processing', `Отправка в OpenRouter OCR...`);
         
         // Create progress callback for detailed logging
         const progressCallback = (msg) => {
@@ -1063,14 +1059,9 @@ els.processBtn.addEventListener("click", async () => {
       log(`📄 Processing full PDF document`);
       log(`📄 File size: ${(currentPdfFile.size / 1024).toFixed(1)} KB`);
       
-      updateProgress('OCR Processing', 'active', `Sending PDF to OCR engine...`);
-      addProgressSubStep('OCR Processing', `Sending to Groq AI OCR...`);
-      log(`📤 Sending PDF to Groq AI OCR...`);
-      
-      // Import OCR_MODELS for display
-      const { OCR_MODELS } = await import('./groqAgent.js');
-      log(`🤖 Calling Groq AI with vision models: ${OCR_MODELS.join(', ')}`);
-      addProgressSubStep('OCR Processing', `Models: ${OCR_MODELS.join(', ')}`);
+      updateProgress('OCR Processing', 'active', `Отправка PDF в OCR движок...`);
+      addProgressSubStep('OCR Processing', `Отправка в OpenRouter OCR...`);
+      log(`📤 Отправляем PDF в OpenRouter OCR...`);
       
       updateProgress('OCR Processing', 'active', `Analyzing PDF with AI vision models...`);
       addProgressSubStep('OCR Processing', `Waiting for AI response...`);
