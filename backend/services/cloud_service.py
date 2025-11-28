@@ -420,20 +420,41 @@ class CloudService:
                     if '/public/' in url:
                         # Try Mail.ru Cloud download endpoint
                         # Format: https://cloud.mail.ru/public/[hash]/[filename] -> https://cloud.mail.ru/api/v2/file/download?weblink=[hash]&key=[timestamp]
-                        match = re.search(r'/public/([^/]+)/([^/]+)$', url)
+                        match = re.search(r'/public/([^/]+)/(.+)$', url)
                         if match:
                             folder_hash = match.group(1)
                             filename = match.group(2)
-                            # Try direct download endpoint
-                            download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={folder_hash}/{filename}"
+                            
+                            # URL encode filename for proper handling of special characters and Cyrillic
+                            from urllib.parse import quote
+                            encoded_filename = quote(filename, safe='')
+                            
+                            # Try direct download endpoint with encoded filename
+                            download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={folder_hash}/{encoded_filename}"
                             api_logger.info(f"Trying alternative download URL: {download_url}")
-                            alt_response = self.session.get(download_url, timeout=30, stream=True, allow_redirects=True)
-                            if alt_response.status_code == 200:
-                                alt_content = alt_response.content
-                                # Check if it's actually a file
-                                if len(alt_content) > 4 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
-                                    api_logger.info(f"Successfully downloaded using alternative URL")
-                                    return alt_content
+                            try:
+                                alt_response = self.session.get(download_url, timeout=30, stream=True, allow_redirects=True)
+                                if alt_response.status_code == 200:
+                                    alt_content = alt_response.content
+                                    # Check if it's actually a file
+                                    if len(alt_content) > 4 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
+                                        api_logger.info(f"Successfully downloaded using alternative URL")
+                                        return alt_content
+                            except Exception as e:
+                                api_logger.warning(f"Alternative download URL failed: {str(e)}")
+                            
+                            # Try with original filename (without encoding)
+                            download_url2 = f"https://cloud.mail.ru/api/v2/file/download?weblink={folder_hash}/{filename}"
+                            api_logger.info(f"Trying alternative download URL (original filename): {download_url2}")
+                            try:
+                                alt_response2 = self.session.get(download_url2, timeout=30, stream=True, allow_redirects=True)
+                                if alt_response2.status_code == 200:
+                                    alt_content2 = alt_response2.content
+                                    if len(alt_content2) > 4 and not (alt_content2[:2] == b'<!' or b'<html' in alt_content2[:100].lower()):
+                                        api_logger.info(f"Successfully downloaded using alternative URL (original filename)")
+                                        return alt_content2
+                            except Exception as e:
+                                api_logger.warning(f"Alternative download URL (original) failed: {str(e)}")
                     
                     # If we found download links, try the first one
                     if download_links:

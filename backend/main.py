@@ -865,10 +865,22 @@ async def get_cloud_file(request: CloudFileRequest):
             }
         )
     except Exception as e:
-        api_logger.error(f"Error downloading cloud file: {str(e)}")
+        error_msg = str(e)
+        api_logger.error(f"Error downloading cloud file: {error_msg}", exc_info=True)
         log_api_response("POST", "/api/cloud/file", 500, 0.0)
-        api_logger.error(f"Error details: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to download file: {str(e)}")
+        api_logger.error(f"Error details - URL: {request.url}, FileName: {request.fileName}, Error: {error_msg}")
+        
+        # Более информативное сообщение об ошибке
+        if "HTML" in error_msg or "html" in error_msg.lower():
+            detail_msg = "Файл недоступен для скачивания. Возможно, файл приватный или URL неверный."
+        elif "timeout" in error_msg.lower():
+            detail_msg = "Превышено время ожидания при загрузке файла. Попробуйте позже."
+        elif "404" in error_msg or "Not Found" in error_msg:
+            detail_msg = "Файл не найден по указанному URL."
+        else:
+            detail_msg = f"Ошибка загрузки файла: {error_msg}"
+        
+        raise HTTPException(status_code=500, detail=detail_msg)
 
 @app.post("/api/export/pdf")
 async def export_pdf(
