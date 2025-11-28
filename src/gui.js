@@ -2314,7 +2314,8 @@ async function loadFileFromCloud(url, fileName) {
       }
     } 
     // Handle image files (convert to PDF-like canvas)
-    else if (fileName.match(/\.(png|jpg|jpeg)$/i)) {
+    // Проверяем реальный тип файла по сигнатуре, а не только по расширению
+    else if (isPng || isJpeg || fileName.match(/\.(png|jpg|jpeg)$/i)) {
       // Определяем MIME тип из имени файла или из blob
       let mimeType = blob.type || (fileName.match(/\.png$/i) ? 'image/png' : 
                                    fileName.match(/\.jpe?g$/i) ? 'image/jpeg' : 'image/png');
