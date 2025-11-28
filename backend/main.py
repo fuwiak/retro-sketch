@@ -42,12 +42,12 @@ app.add_middleware(
 )
 
 # Initialize services
-ocr_service = OCRService()
+openrouter_service = OpenRouterService()
+ocr_service = OCRService(openrouter_service=openrouter_service)
 translation_service = TranslationService()
 export_service = ExportService()
 cloud_service = CloudService()
 telegram_service = TelegramService()
-openrouter_service = OpenRouterService()
 
 # Frontend static files configuration
 # Check if frontend dist directory exists (for Railway deployment)
@@ -88,9 +88,9 @@ async def process_ocr(
     languages: str = Form("rus+eng")
 ):
     """
-    Process PDF or image file with OCR using intelligent method selection.
-    AI agent evaluates file complexity and estimated processing time,
-    then selects optimal method (LLM Groq or Tesseract OCR).
+    Process PDF or image file with OCR using OpenRouter first, then OCR fallbacks.
+    Порядок: OpenRouter (специализированные OCR модели) -> PyPDF2 -> Tesseract OCR
+    Groq полностью отключен - используется только OpenRouter + OCR fallback'и
     Supports multiple languages (rus+eng, eng, rus, etc.)
     """
     start_time = time.time()
