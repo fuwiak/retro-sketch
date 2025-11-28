@@ -189,6 +189,8 @@ export async function renderPdfPreview(file, canvas) {
  * Upload PDF or image and process with OCR via backend API
  */
 export async function processPdfWithOCR(file, languages = ['rus'], progressCallback = null, ocrMethod = 'auto', ocrQuality = 'balanced') {
+  let progressTimer = null; // Объявляем на уровне функции для доступа в catch
+  
   try {
     // Always use backend API endpoint
     if (progressCallback) {
@@ -214,7 +216,6 @@ export async function processPdfWithOCR(file, languages = ['rus'], progressCallb
     
     // Запускаем таймер для показа реального времени прогресса
     let elapsedSeconds = 0;
-    let progressTimer = null;
     if (progressCallback) {
       progressTimer = setInterval(() => {
         elapsedSeconds += 2;
@@ -264,7 +265,7 @@ export async function processPdfWithOCR(file, languages = ['rus'], progressCallb
     }
     
     // Convert backend response to frontend format
-    return {
+    const finalResult = {
       text: result.text || '',
       confidence: 0.9,
       language: languages.join('+'),
@@ -273,8 +274,16 @@ export async function processPdfWithOCR(file, languages = ['rus'], progressCallb
       isCropped: file.type && file.type.startsWith('image/'),
       processing_info: result.processing_info || {}
     };
+    
+    return finalResult;
   } catch (error) {
     console.error('OCR processing error:', error);
+    
+    // Останавливаем таймер при ошибке
+    if (progressTimer) {
+      clearInterval(progressTimer);
+      progressTimer = null;
+    }
     
     // Groq полностью отключен - используется только OpenRouter + OCR fallback'и
     // Если backend не сработал, возвращаем ошибку без fallback на Groq
