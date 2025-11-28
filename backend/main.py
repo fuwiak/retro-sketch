@@ -289,11 +289,132 @@ async def extract_text_from_sketch(request: TextExtractionRequest):
         )
 
 
+class SketchAnalysisCompleteRequest(BaseModel):
+    """Комплексный запрос: анализ чертежа + извлечение текста + перевод"""
+    image: str  # Base64 encoded image
+    languages: List[str] = ["rus", "eng"]  # Языки для извлечения текста
+    vision_model: Optional[str] = None  # Модель для анализа/извлечения текста
+    text_model: Optional[str] = None  # Модель для перевода
+    auto_translate: bool = True  # Автоматически переводить текст
+    target_language: str = "en"  # Язык перевода
+    use_glossary: bool = True  # Использовать технический глоссарий
+
+
 class OpenRouterTranslationRequest(BaseModel):
     text: str
     target_language: str = "en"  # "en" for English, "ru" for Russian
     model: Optional[str] = None
     use_glossary: bool = True
+
+
+@app.post("/api/openrouter/analyze-complete")
+async def analyze_sketch_complete(request: SketchAnalysisCompleteRequest):
+    """
+    Комплексный анализ чертежа: извлечение текста + перевод
+    Использует OpenRouter vision модели для извлечения текста (rus/eng)
+    и text модели для перевода на целевой язык
+    """
+    start_time = time.time()
+    log_api_request("POST", "/api/openrouter/analyze-complete", {
+        "languages": request.languages,
+        "auto_translate": request.auto_translate,
+        "target_language": request.target_language
+    })
+    
+    try:
+        if not openrouter_service.is_available():
+            raise HTTPException(
+                status_code=503,
+                detail="OpenRouter API key not configured. Please set OPENROUTER_API_KEY in environment variables."
+            )
+        
+        api_logger.info("="*80)
+        api_logger.info("🔬 Starting complete sketch analysis")
+        api_logger.info(f"   Languages: {request.languages}")
+        api_logger.info(f"   Auto-translate: {request.auto_translate}")
+        api_logger.info(f"   Target language: {request.target_language}")
+        api_logger.info("="*80)
+        
+        # Step 1: Extract text from sketch
+        api_logger.info("📝 Step 1: Extracting text from sketch...")
+        extraction_start = time.time()
+        
+        extracted_text = await openrouter_service.extract_text_from_image(
+            image_base64=request.image,
+            languages=request.languages,
+            model=request.vision_model
+        )
+        
+        extraction_time = time.time() - extraction_start
+        
+        if not extracted_text:
+            api_logger.error("❌ Text extraction failed - all models failed")
+            raise HTTPException(
+                status_code=503,
+                detail="Failed to extract text. All OpenRouter models failed. Check API key and internet connection."
+            )
+        
+        api_logger.info(f"✅ Text extracted - Time: {extraction_time:.2f}s, Length: {len(extracted_text)} chars")
+        api_logger.info(f"   Text preview: {extracted_text[:200]}...")
+        
+        # Step 2: Translate if requested
+        translated_text = None
+        translation_time = 0
+        
+        if request.auto_translate and extracted_text:
+            api_logger.info(f"🌐 Step 2: Translating text to {request.target_language}...")
+            translation_start = time.time()
+            
+            translated_text = await openrouter_service.translate_text(
+                text=extracted_text,
+                target_language=request.target_language,
+                model=request.text_model,
+                use_glossary=request.use_glossary
+            )
+            
+            translation_time = time.time() - translation_start
+            
+            if translated_text:
+                api_logger.info(f"✅ Translation completed - Time: {translation_time:.2f}s, Length: {len(translated_text)} chars")
+                api_logger.info(f"   Translation preview: {translated_text[:200]}...")
+            else:
+                api_logger.warning("⚠️ Translation failed - all models failed, returning only extracted text")
+        
+        response_time = time.time() - start_time
+        log_api_response("POST", "/api/openrouter/analyze-complete", 200, response_time)
+        
+        api_logger.info("="*80)
+        api_logger.info(f"✅ Complete analysis finished - Total time: {response_time:.2f}s")
+        api_logger.info(f"   Extraction: {extraction_time:.2f}s")
+        if request.auto_translate:
+            api_logger.info(f"   Translation: {translation_time:.2f}s")
+        api_logger.info("="*80)
+        
+        return {
+            "success": True,
+            "extractedText": extracted_text,
+            "translatedText": translated_text,
+            "languages": request.languages,
+            "targetLanguage": request.target_language,
+            "autoTranslated": request.auto_translate and translated_text is not None,
+            "processing_time": {
+                "total": response_time,
+                "extraction": extraction_time,
+                "translation": translation_time if request.auto_translate else 0
+            }
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        response_time = time.time() - start_time
+        log_api_response("POST", "/api/openrouter/analyze-complete", 500, response_time)
+        api_logger.error(f"❌ Complete analysis failed - Error: {str(e)}", exc_info=True)
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"Complete analysis failed: {str(e)}"
+        )
 
 
 @app.post("/api/openrouter/translate")

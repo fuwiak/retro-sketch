@@ -16,15 +16,17 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_API_URL = os.getenv("OPENROUTER_API_URL", "https://openrouter.ai/api/v1/chat/completions")
 
 # Vision models for sketch analysis and text extraction
-# Priority order: best quality first, then fallbacks
-VISION_MODELS = [
-    {"provider": "openrouter", "model": "openai/gpt-4o"},  # GPT-4o - best for technical drawings
-    {"provider": "openrouter", "model": "anthropic/claude-3.5-sonnet"},  # Claude 3.5 Sonnet
-    {"provider": "openrouter", "model": "google/gemini-1.5-pro"},  # Gemini 1.5 Pro - strong image processing
-    {"provider": "openrouter", "model": "google/gemini-2.0-flash-exp"},  # Gemini 2.0 Flash Experimental (free)
-    {"provider": "openrouter", "model": "qwen/qwen-2-vl-72b-instruct"},  # Qwen2-VL - high performance
-    {"provider": "openrouter", "model": "mistralai/pixtral-large"},  # Pixtral Large - 124B params
-    {"provider": "openrouter", "model": "x-ai/grok-4.1-fast:free"},  # Grok 4.1 Fast (free)
+# Порядок попыток подключения к API для анализа чертежей и извлечения текста
+# Топовые платные модели
+DETECTION_FALLBACKS = [
+    {"provider": "openrouter", "model": "openai/gpt-4o"},  # GPT-4o - лучшая для технических чертежей
+    {"provider": "openrouter", "model": "anthropic/claude-3.5-sonnet"},  # Claude 3.5 Sonnet - баланс качества и стоимости
+    {"provider": "openrouter", "model": "google/gemini-1.5-pro"},  # Gemini 1.5 Pro - сильные возможности обработки изображений
+    # Бесплатные и бюджетные варианты
+    {"provider": "openrouter", "model": "google/gemini-2.0-flash-exp"},  # Gemini 2.0 Flash Experimental (бесплатная)
+    {"provider": "openrouter", "model": "qwen/qwen-2-vl-72b-instruct"},  # Qwen2-VL - высокая производительность
+    {"provider": "openrouter", "model": "mistralai/pixtral-large"},  # Pixtral Large - 124B параметров
+    {"provider": "openrouter", "model": "x-ai/grok-4.1-fast:free"},  # Grok 4.1 Fast (бесплатная)
     {"provider": "openrouter", "model": "google/gemini-2.0-flash-001"}  # Google Gemini 2.0 Flash
 ]
 
@@ -36,8 +38,12 @@ TEXT_MODELS = [
     {"provider": "openrouter", "model": "google/gemini-2.0-flash-001"}  # Fast fallback
 ]
 
-DEFAULT_VISION_MODEL = "google/gemini-2.0-flash-001"
-DEFAULT_TEXT_MODEL = "anthropic/claude-3.5-sonnet"
+# Настройки моделей по умолчанию
+DEFAULT_VISION_MODEL = "google/gemini-2.0-flash-001"  # Для анализа чертежей и извлечения текста
+DEFAULT_TEXT_MODEL = "anthropic/claude-3.5-sonnet"  # Для перевода
+
+# Legacy compatibility
+VISION_MODELS = [m for m in DETECTION_FALLBACKS if m["provider"] == "openrouter"]
 
 
 class OpenRouterService:
@@ -46,8 +52,9 @@ class OpenRouterService:
     def __init__(self):
         self.api_key = OPENROUTER_API_KEY
         self.api_url = OPENROUTER_API_URL
-        self.vision_models = [m["model"] for m in VISION_MODELS if m["provider"] == "openrouter"]
+        self.vision_models = [m["model"] for m in DETECTION_FALLBACKS if m["provider"] == "openrouter"]
         self.text_models = [m["model"] for m in TEXT_MODELS if m["provider"] == "openrouter"]
+        self.detection_fallbacks = DETECTION_FALLBACKS
     
     def is_available(self) -> bool:
         """Check if OpenRouter service is available"""
@@ -75,12 +82,20 @@ class OpenRouterService:
         # Use provided model or default
         model_to_use = model or DEFAULT_VISION_MODEL
         
-        # Try models in priority order
-        models_to_try = [model_to_use] + [m for m in self.vision_models if m != model_to_use]
+        # СНАЧАЛА пробуем выбранную пользователем модель
+        models_to_try = [model_to_use]
+        api_logger.info(f"🎯 Приоритет: используем выбранную модель для анализа: {model_to_use}")
+        
+        # Затем добавляем fallback модели из DETECTION_FALLBACKS (кроме уже добавленной)
+        for fallback in self.detection_fallbacks:
+            if fallback["provider"] == "openrouter":
+                model_name = fallback["model"]
+                if model_name != model_to_use:  # Не добавляем, если уже есть
+                    models_to_try.append(model_name)
         
         for model_name in models_to_try:
             try:
-                api_logger.info(f"Trying OpenRouter vision model: {model_name}")
+                api_logger.info(f"Пробуем OpenRouter vision модель: {model_name}")
                 
                 url = self.api_url
                 headers = {
@@ -174,12 +189,20 @@ class OpenRouterService:
                     
             except httpx.RequestException as e:
                 api_logger.error(f"OpenRouter API request error with {model_name}: {e}")
+                if hasattr(e, 'response') and e.response is not None:
+                    api_logger.error(f"HTTP {e.response.status_code}: {e.response.text[:500] if e.response.text else 'No error message'}")
                 continue
             except Exception as e:
                 api_logger.error(f"Unexpected error with {model_name}: {e}")
                 continue
         
-        api_logger.error("All OpenRouter vision models failed")
+        api_logger.error("="*80)
+        api_logger.error("❌ ОШИБКА: Все OpenRouter vision модели не сработали!")
+        api_logger.error("   Проверьте:")
+        api_logger.error("   1. API ключ OPENROUTER_API_KEY в переменных окружения Railway")
+        api_logger.error("   2. Интернет-соединение")
+        api_logger.error("   3. Доступность API провайдеров")
+        api_logger.error("="*80)
         return None
     
     def _parse_sketch_data_from_text(self, text: str) -> Dict:
@@ -283,8 +306,16 @@ class OpenRouterService:
         # Use provided model or default
         model_to_use = model or DEFAULT_VISION_MODEL
         
-        # Try models in priority order
-        models_to_try = [model_to_use] + [m for m in self.vision_models if m != model_to_use]
+        # СНАЧАЛА пробуем выбранную пользователем модель
+        models_to_try = [model_to_use]
+        api_logger.info(f"🎯 Приоритет: используем выбранную модель для извлечения текста: {model_to_use}")
+        
+        # Затем добавляем fallback модели из DETECTION_FALLBACKS (кроме уже добавленной)
+        for fallback in self.detection_fallbacks:
+            if fallback["provider"] == "openrouter":
+                model_name = fallback["model"]
+                if model_name != model_to_use:  # Не добавляем, если уже есть
+                    models_to_try.append(model_name)
         
         lang_names = {
             "rus": "Russian",
@@ -353,11 +384,22 @@ class OpenRouterService:
                         api_logger.info(f"✅ Text extracted successfully with model: {model_name}")
                         return content
                     
+            except httpx.RequestException as e:
+                api_logger.error(f"OpenRouter API request error with {model_name}: {e}")
+                if hasattr(e, 'response') and e.response is not None:
+                    api_logger.error(f"HTTP {e.response.status_code}: {e.response.text[:500] if e.response.text else 'No error message'}")
+                continue
             except Exception as e:
                 api_logger.error(f"Error extracting text with {model_name}: {e}")
                 continue
         
-        api_logger.error("All models failed to extract text")
+        api_logger.error("="*80)
+        api_logger.error("❌ ОШИБКА: Все модели не смогли извлечь текст!")
+        api_logger.error("   Проверьте:")
+        api_logger.error("   1. API ключ OPENROUTER_API_KEY в переменных окружения Railway")
+        api_logger.error("   2. Интернет-соединение")
+        api_logger.error("   3. Доступность API провайдеров")
+        api_logger.error("="*80)
         return None
     
     async def translate_text(
@@ -463,4 +505,5 @@ class OpenRouterService:
             translated = pattern.sub(en_term, translated)
         
         return translated
+
 
