@@ -265,7 +265,7 @@ class OCRService:
                             languages=languages,
                             model=model_to_use
                         )
-                    
+                        
                         openrouter_time = time.time() - openrouter_start
                         
                         if ocr_text and len(ocr_text.strip()) > 0:
@@ -275,7 +275,7 @@ class OCRService:
                         else:
                             ocr_logger.warning("⚠️ OpenRouter вернул пустой результат, пробуем OCR fallback'и...")
                             ocr_text = None
-            else:
+                    else:
                         ocr_text = None
                         
                 except Exception as e:
