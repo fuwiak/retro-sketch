@@ -2247,7 +2247,9 @@ async function loadFileFromCloud(url, fileName) {
     });
     
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.error('Error response:', errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 200)}`);
     }
     
     const blob = await response.blob();

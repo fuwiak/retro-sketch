@@ -412,9 +412,18 @@ class CloudService:
                     # Try to find script tags with download URLs
                     for script in soup.find_all('script'):
                         if script.string:
-                            # Look for URLs in script
-                            urls = re.findall(r'https?://[^\s"\'<>]+\.(?:pdf|png|jpg|jpeg)', script.string, re.I)
+                            # Look for URLs in script - расширенный поиск для Mail.ru Cloud
+                            # Ищем любые URL с расширениями файлов
+                            urls = re.findall(r'https?://[^\s"\'<>\)]+\.(?:pdf|png|jpg|jpeg|jpe)', script.string, re.I)
                             download_links.extend(urls)
+                            
+                            # Также ищем ссылки на API Mail.ru Cloud
+                            api_urls = re.findall(r'https?://cloud\.mail\.ru/api/v\d+/file/download[^\s"\'<>\)]+', script.string, re.I)
+                            download_links.extend(api_urls)
+                            
+                            # Ищем ссылки с параметрами weblink
+                            weblink_urls = re.findall(r'https?://cloud\.mail\.ru/[^\s"\'<>\)]+', script.string, re.I)
+                            download_links.extend(weblink_urls)
                     
                     # Try alternative: use /download endpoint
                     if '/public/' in url:
@@ -456,16 +465,26 @@ class CloudService:
                             except Exception as e:
                                 api_logger.warning(f"Alternative download URL (original) failed: {str(e)}")
                     
-                    # If we found download links, try the first one
+                    # If we found download links, try them all
                     if download_links:
-                        api_logger.info(f"Found {len(download_links)} potential download links, trying first: {download_links[0]}")
-                        alt_response = self.session.get(download_links[0], timeout=30, stream=True, allow_redirects=True)
-                        alt_response.raise_for_status()
-                        alt_content = alt_response.content
-                        if len(alt_content) > 4 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
-                            return alt_content
+                        api_logger.info(f"Found {len(download_links)} potential download links, trying them...")
+                        for i, download_link in enumerate(download_links[:5]):  # Пробуем первые 5 ссылок
+                            try:
+                                api_logger.info(f"Trying download link {i+1}/{min(len(download_links), 5)}: {download_link[:100]}...")
+                                alt_response = self.session.get(download_link, timeout=30, stream=True, allow_redirects=True)
+                                if alt_response.status_code == 200:
+                                    alt_content = alt_response.content
+                                    if len(alt_content) > 4 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
+                                        api_logger.info(f"Successfully downloaded using extracted link {i+1}")
+                                        return alt_content
+                            except Exception as e:
+                                api_logger.warning(f"Download link {i+1} failed: {str(e)}")
+                                continue
                     
-                    raise ValueError(f"Mail.ru Cloud returned HTML instead of file. This may indicate the file is not publicly accessible or the URL is incorrect. Content-Type: {content_type}")
+                    # Если ничего не сработало, пробуем извлечь информацию из HTML для создания прямого URL
+                    api_logger.error(f"Failed to extract download link from HTML. Content-Type: {content_type}")
+                    api_logger.error(f"HTML content preview: {content[:1000].decode('utf-8', errors='ignore')[:500]}")
+                    raise ValueError(f"Mail.ru Cloud вернул HTML вместо файла. Файл может быть не публичным или URL неверный. Content-Type: {content_type}")
             
             # Validate it's actually a file (not HTML)
             if len(content) > 4:
