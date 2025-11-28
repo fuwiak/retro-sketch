@@ -1368,17 +1368,65 @@ function renderResults() {
   html += '</div>';
   
   html += '<div style="margin-top: 10px;">';
-  html += '<strong style="color: var(--ui-color);">Raw OCR Text:</strong><br>';
-  html += `<div style="margin-top: 5px; font-size: 0.75rem; opacity: 0.8; max-height: 200px; overflow-y: auto; border: 1px solid var(--ui-color); padding: 5px;">`;
-  html += translatedData.rawText.substring(0, 500);
-  if (translatedData.rawText.length > 500) {
-    html += '...';
+  html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">';
+  html += '<strong style="color: var(--ui-color);">Raw OCR Text:</strong>';
+  html += '<div style="display: flex; gap: 5px;">';
+  html += '<button id="rawTextToggle" style="background: rgba(0,0,0,0.8); border: 1px solid var(--ui-color); color: var(--ui-color); padding: 3px 8px; font-family: inherit; font-size: 0.7rem; cursor: pointer; border-radius: 8px;">Оригинал / Translated</button>';
+  html += '</div>';
+  html += '</div>';
+  
+  // Получаем оригинальный текст
+  const originalText = ocrResult && ocrResult.text ? ocrResult.text : (extractedData && extractedData.rawText ? extractedData.rawText : '');
+  const translatedText = translatedData.rawText || '';
+  
+  // По умолчанию показываем переведенную версию, если доступна
+  const isTranslatedMode = translatedText && translatedText !== originalText;
+  
+  html += `<div id="rawTextContent" style="margin-top: 5px; font-size: 0.75rem; opacity: 0.8; max-height: 200px; overflow-y: auto; border: 1px solid var(--ui-color); padding: 5px; white-space: pre-wrap; word-wrap: break-word;">`;
+  if (isTranslatedMode) {
+    html += translatedText.substring(0, 1000);
+    if (translatedText.length > 1000) {
+      html += '...';
+    }
+  } else {
+    html += originalText.substring(0, 1000);
+    if (originalText.length > 1000) {
+      html += '...';
+    }
   }
   html += `</div>`;
   html += '</div>';
   
+  // Сохраняем тексты для переключения
+  window._rawTextOriginal = originalText;
+  window._rawTextTranslated = translatedText;
+  
   html += '</div>';
   els.resultsList.innerHTML = html;
+  
+  // Добавляем обработчик для переключения между оригинальным и переведенным текстом
+  const rawTextToggle = document.getElementById('rawTextToggle');
+  const rawTextContent = document.getElementById('rawTextContent');
+  if (rawTextToggle && rawTextContent && window._rawTextOriginal && window._rawTextTranslated) {
+    let showingOriginal = !isTranslatedMode; // Начинаем с переведенного, если доступно
+    
+    rawTextToggle.addEventListener('click', () => {
+      showingOriginal = !showingOriginal;
+      const textToShow = showingOriginal ? window._rawTextOriginal : window._rawTextTranslated;
+      const label = showingOriginal ? 'Оригинал' : 'Переведено';
+      
+      rawTextToggle.textContent = label;
+      
+      if (textToShow) {
+        rawTextContent.textContent = textToShow.length > 1000 ? textToShow.substring(0, 1000) + '...' : textToShow;
+      }
+      
+      playClick(250);
+    });
+    
+    // Устанавливаем начальную метку кнопки
+    rawTextToggle.textContent = showingOriginal ? 'Оригинал' : 'Переведено';
+  }
 }
 
 // ========== EXPORT ==========
