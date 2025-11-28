@@ -588,15 +588,19 @@ class OpenRouterService:
             # Ленивая проверка OpenCV - только при использовании
             if NUMPY_AVAILABLE:
                 # Проверяем доступность OpenCV только здесь
-                if OPENCV_AVAILABLE is None:
-                    try:
-                        import cv2
-                        _ = cv2.__version__
-                        global OPENCV_AVAILABLE
-                        OPENCV_AVAILABLE = True
-                    except (ImportError, AttributeError, OSError) as e:
-                        OPENCV_AVAILABLE = False
-                        api_logger.debug(f"OpenCV недоступен: {e}")
+                # Ленивая проверка OpenCV - только при использовании
+                try:
+                    import cv2
+                    _ = cv2.__version__
+                    # Используем модульную переменную без global
+                    import backend.services.openrouter_service as ors_module
+                    ors_module.OPENCV_AVAILABLE = True
+                    OPENCV_AVAILABLE = True
+                except (ImportError, AttributeError, OSError) as e:
+                    import backend.services.openrouter_service as ors_module
+                    ors_module.OPENCV_AVAILABLE = False
+                    OPENCV_AVAILABLE = False
+                    api_logger.debug(f"OpenCV недоступен: {e}")
                 
                 if OPENCV_AVAILABLE:
                     try:
