@@ -1143,7 +1143,8 @@ els.processBtn.addEventListener("click", async () => {
           languages, 
           progressCallback,
           userSettings.ocrMethod || 'auto',
-          userSettings.ocrQuality || 'balanced'
+          userSettings.ocrQuality || 'balanced',
+          currentAbortController ? currentAbortController.signal : null
         );
         addProgressSubStep('OCR Processing', `✅ OCR completed on full PDF`);
         addProgressSubStep('OCR Processing', `Model used: ${ocrResult.model || 'unknown'}`);
