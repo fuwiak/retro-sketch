@@ -1534,7 +1534,12 @@ els.chatSendBtn.addEventListener("click", async () => {
       extractedText = ocrResult.text;
       log(`💬 Используем текст из ocrResult (${extractedText.length} символов)`);
     }
-    // Приоритет 2: translatedData.rawText - текст из PROCESSING RESULTS
+    // Приоритет 2: extractedData.rawText - текст из извлеченных данных
+    else if (extractedData && extractedData.rawText) {
+      extractedText = extractedData.rawText;
+      log(`💬 Используем текст из extractedData.rawText (${extractedText.length} символов)`);
+    }
+    // Приоритет 3: translatedData.rawText - текст из PROCESSING RESULTS
     else if (translatedData && translatedData.rawText) {
       extractedText = translatedData.rawText;
       log(`💬 Используем текст из translatedData.rawText (${extractedText.length} символов)`);
