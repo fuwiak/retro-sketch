@@ -1382,17 +1382,14 @@ function renderResults() {
   // По умолчанию показываем переведенную версию, если доступна
   const isTranslatedMode = translatedText && translatedText !== originalText;
   
-  html += `<div id="rawTextContent" style="margin-top: 5px; font-size: 0.75rem; opacity: 0.8; max-height: 200px; overflow-y: auto; border: 1px solid var(--ui-color); padding: 5px; white-space: pre-wrap; word-wrap: break-word;">`;
-  if (isTranslatedMode) {
-    html += translatedText.substring(0, 1000);
-    if (translatedText.length > 1000) {
-      html += '...';
-    }
+  html += `<div id="rawTextContent" style="margin-top: 5px; font-size: 0.75rem; opacity: 0.8; max-height: 300px; overflow-y: auto; border: 1px solid var(--ui-color); padding: 5px; white-space: pre-wrap; word-wrap: break-word;">`;
+  const initialText = isTranslatedMode ? translatedText : originalText;
+  if (initialText) {
+    // Показываем полный текст (или до 5000 символов для производительности)
+    const displayText = initialText.length > 5000 ? initialText.substring(0, 5000) + '\n\n... (текст обрезан, полный текст доступен в экспорте)' : initialText;
+    html += displayText.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
   } else {
-    html += originalText.substring(0, 1000);
-    if (originalText.length > 1000) {
-      html += '...';
-    }
+    html += isTranslatedMode ? 'Переведенный текст недоступен' : 'Оригинальный текст недоступен';
   }
   html += `</div>`;
   html += '</div>';
