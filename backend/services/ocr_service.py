@@ -307,7 +307,7 @@ class OCRService:
                 if self.tesseract_available:
                     try:
                         ocr_logger.info("Используем Tesseract OCR напрямую...")
-                    ocr_text = await self._process_with_tesseract(file_content, file_type, languages)
+                        ocr_text = await self._process_with_tesseract(file_content, file_type, languages)
                         if ocr_text:
                             processing_info["method"] = "tesseract_direct"
                     except Exception as e:
