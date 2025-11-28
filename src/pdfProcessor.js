@@ -188,7 +188,7 @@ export async function renderPdfPreview(file, canvas) {
 /**
  * Upload PDF or image and process with OCR via backend API
  */
-export async function processPdfWithOCR(file, languages = ['rus'], progressCallback = null, ocrMethod = 'auto', ocrQuality = 'balanced') {
+export async function processPdfWithOCR(file, languages = ['rus'], progressCallback = null, ocrMethod = 'auto', ocrQuality = 'balanced', abortSignal = null) {
   let progressTimer = null; // Объявляем на уровне функции для доступа в catch
   
   try {
