@@ -212,6 +212,19 @@ export async function processPdfWithOCR(file, languages = ['rus'], progressCallb
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 минут
     
+    // Запускаем таймер для показа реального времени прогресса
+    let elapsedSeconds = 0;
+    let progressTimer = null;
+    if (progressCallback) {
+      progressTimer = setInterval(() => {
+        elapsedSeconds += 2;
+        const minutes = Math.floor(elapsedSeconds / 60);
+        const seconds = elapsedSeconds % 60;
+        const timeStr = minutes > 0 ? `${minutes}м ${seconds}с` : `${seconds}с`;
+        progressCallback(`⏳ Обработка... (${timeStr})`);
+      }, 2000); // Обновляем каждые 2 секунды
+    }
+    
     const response = await fetch(`${API_BASE_URL}/ocr/process`, {
       method: 'POST',
       body: formData,
@@ -219,6 +232,10 @@ export async function processPdfWithOCR(file, languages = ['rus'], progressCallb
     });
     
     clearTimeout(timeoutId);
+    if (progressTimer) {
+      clearInterval(progressTimer);
+      progressTimer = null;
+    }
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));

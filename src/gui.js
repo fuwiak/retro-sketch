@@ -1070,10 +1070,26 @@ els.processBtn.addEventListener("click", async () => {
       updateProgress('OCR Processing', 'active', `Analyzing PDF with AI vision models...`);
       addProgressSubStep('OCR Processing', `Waiting for AI response...`);
       
+      // Запускаем таймер для показа времени ожидания
+      let elapsedSeconds = 0;
+      let statusTimer = setInterval(() => {
+        elapsedSeconds += 2;
+        const minutes = Math.floor(elapsedSeconds / 60);
+        const seconds = elapsedSeconds % 60;
+        const timeStr = minutes > 0 ? `${minutes}м ${seconds}с` : `${seconds}с`;
+        updateProgress('OCR Processing', 'active', `Analyzing PDF with AI vision models... (${timeStr})`);
+        els.status.textContent = `⏳ OCR Processing... (${timeStr})`;
+      }, 2000); // Обновляем каждые 2 секунды
+      
       // Create progress callback for detailed logging
       const progressCallback = (msg) => {
         addProgressSubStep('OCR Processing', msg);
         log(`📝 ${msg}`);
+        // Обновляем основной статус, если в сообщении есть время
+        if (msg.includes('⏳ Обработка')) {
+          updateProgress('OCR Processing', 'active', msg);
+          els.status.textContent = msg.replace('⏳ Обработка...', '⏳ OCR Processing');
+        }
       };
       
       ocrResult = await pdfProcessor.processPdfWithOCR(
