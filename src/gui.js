@@ -2315,9 +2315,20 @@ async function loadFileFromCloud(url, fileName) {
     } 
     // Handle image files (convert to PDF-like canvas)
     else if (fileName.match(/\.(png|jpg|jpeg)$/i)) {
-      // Определяем MIME тип
-      const mimeType = fileName.match(/\.png$/i) ? 'image/png' : 
-                       fileName.match(/\.jpe?g$/i) ? 'image/jpeg' : 'image/png';
+      // Определяем MIME тип из имени файла или из blob
+      let mimeType = blob.type || (fileName.match(/\.png$/i) ? 'image/png' : 
+                                   fileName.match(/\.jpe?g$/i) ? 'image/jpeg' : 'image/png');
+      
+      // Если blob.type пустой или неправильный, используем определение из расширения
+      if (!blob.type || blob.type === 'application/octet-stream') {
+        mimeType = fileName.match(/\.png$/i) ? 'image/png' : 
+                   fileName.match(/\.jpe?g$/i) ? 'image/jpeg' : 'image/png';
+        
+        // Создаем новый blob с правильным MIME типом
+        blob = new Blob([blob], { type: mimeType });
+      }
+      
+      console.log(`Loading image: ${fileName}, MIME type: ${mimeType}, Blob size: ${blob.size} bytes`);
       
       // Создаем File объект для изображения
       const file = new File([blob], fileName, { type: mimeType });
@@ -2325,34 +2336,62 @@ async function loadFileFromCloud(url, fileName) {
       
       const img = new Image();
       const imgUrl = URL.createObjectURL(blob);
+      
       img.onload = () => {
-        // Create a canvas and draw the image
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        
-        // Render directly on PDF canvas
-        renderImageOnCanvas(canvas);
-        
-        // Show preview
-        els.pdfPreview.innerHTML = `<img src="${imgUrl}" style="max-width: 100%; height: auto; max-height: 600px;" />`;
-        els.pdfPreview.classList.remove('hidden');
-        els.pdfPreviewPlaceholder.style.display = 'none';
-        
-        // Update status
-        els.status.textContent = `🖼️ Selected: ${fileName}`;
-        els.cloudFolderStatus.textContent = `✓ Loaded ${fileName} - ready to process`;
-        log(`✓ Loaded image from cloud: ${fileName} (${(blob.size / 1024).toFixed(1)} KB) - ready for processing`);
-        
-        URL.revokeObjectURL(imgUrl);
+        try {
+          console.log(`Image loaded successfully: ${img.width}x${img.height}`);
+          
+          // Create a canvas and draw the image
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          
+          // Render directly on PDF canvas
+          renderImageOnCanvas(canvas);
+          
+          // Show preview - используем imgUrl, который будет валиден до revokeObjectURL
+          els.pdfPreview.innerHTML = `<img src="${imgUrl}" style="max-width: 100%; height: auto; max-height: 600px;" />`;
+          els.pdfPreview.classList.remove('hidden');
+          els.pdfPreviewPlaceholder.style.display = 'none';
+          
+          // Update status
+          els.status.textContent = `🖼️ Selected: ${fileName}`;
+          els.cloudFolderStatus.textContent = `✓ Loaded ${fileName} - ready to process`;
+          log(`✓ Loaded image from cloud: ${fileName} (${(blob.size / 1024).toFixed(1)} KB, ${img.width}x${img.height}) - ready for processing`);
+          
+          playTeleportFX();
+          
+          // Не отзываем URL сразу - дадим время для отображения изображения
+          setTimeout(() => {
+            URL.revokeObjectURL(imgUrl);
+          }, 1000);
+        } catch (error) {
+          console.error('Error processing loaded image:', error);
+          els.cloudFolderStatus.textContent = `❌ Error processing ${fileName}`;
+          els.status.textContent = `❌ Error processing image: ${fileName}`;
+          URL.revokeObjectURL(imgUrl);
+        }
       };
-      img.onerror = () => {
+      
+      img.onerror = (error) => {
+        console.error('Error loading image:', error);
+        console.error('Image URL:', imgUrl);
+        console.error('Blob info:', { size: blob.size, type: blob.type, mimeType });
+        
+        // Проверяем первые байты blob для диагностики
+        blob.slice(0, 10).arrayBuffer().then(bytes => {
+          const uint8Array = new Uint8Array(bytes);
+          console.error('First bytes:', Array.from(uint8Array).map(b => `0x${b.toString(16)}`).join(' '));
+        }).catch(e => console.error('Error reading blob bytes:', e));
+        
         els.cloudFolderStatus.textContent = `❌ Error loading ${fileName}`;
         els.status.textContent = `❌ Error loading image: ${fileName}`;
+        log(`❌ Error loading image: ${fileName} - invalid image data or corrupted file`);
         URL.revokeObjectURL(imgUrl);
       };
+      
       img.src = imgUrl;
     }
     

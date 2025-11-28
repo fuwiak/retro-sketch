@@ -857,9 +857,23 @@ async def get_cloud_file(request: CloudFileRequest):
         else:
             content_disposition = f'attachment; filename="{request.fileName}"'
         
+        # Определяем MIME тип на основе расширения файла
+        import mimetypes
+        mime_type, _ = mimetypes.guess_type(request.fileName)
+        if not mime_type:
+            # Fallback для известных типов
+            if request.fileName.lower().endswith('.png'):
+                mime_type = 'image/png'
+            elif request.fileName.lower().endswith(('.jpg', '.jpeg')):
+                mime_type = 'image/jpeg'
+            elif request.fileName.lower().endswith('.pdf'):
+                mime_type = 'application/pdf'
+            else:
+                mime_type = "application/octet-stream"
+        
         return Response(
             content=file_content,
-            media_type="application/octet-stream",
+            media_type=mime_type,
             headers={
                 "Content-Disposition": content_disposition
             }
