@@ -1525,11 +1525,25 @@ els.chatSendBtn.addEventListener("click", async () => {
   playClick(400);
   
   try {
-    // Получаем извлеченный текст
-    const extractedText = extractedData ? JSON.stringify(extractedData) : '';
+    // Получаем извлеченный текст из extractedData или из результатов
+    let extractedText = '';
+    if (extractedData && typeof extractedData === 'object') {
+      extractedText = extractedData.text || JSON.stringify(extractedData);
+    } else if (extractedData) {
+      extractedText = extractedData;
+    }
+    
+    // Также пытаемся получить текст из панели результатов
+    if (!extractedText && els.extractedData) {
+      const extractedElement = els.extractedData.querySelector('pre, p');
+      if (extractedElement) {
+        extractedText = extractedElement.textContent || extractedElement.innerText;
+      }
+    }
     
     // Отправляем вопрос на backend
-    const response = await fetch(`${API_BASE_URL}/api/openrouter/ask-question`, {
+    const apiBaseUrl = getApiBaseUrl();
+    const response = await fetch(`${apiBaseUrl}/api/openrouter/ask-question`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
