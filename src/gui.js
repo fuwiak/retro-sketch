@@ -994,23 +994,23 @@ els.pdfFileInput.addEventListener("change", async (e) => {
       els.pdfPreview.innerHTML = `<p style="opacity: 0.6; text-align: center; padding: 20px;">Image loaded but preview unavailable</p>`;
     }
   } else {
-    els.status.textContent = `📄 Selected: ${file.name}`;
-    log(`📄 PDF file selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
-    
+  els.status.textContent = `📄 Selected: ${file.name}`;
+  log(`📄 PDF file selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+  
     // Show preview for PDF
-    try {
-      const preview = await pdfProcessor.renderPdfPreview(file, els.pdfCanvas);
-      if (typeof preview === 'string' && preview.startsWith('data:')) {
-        // Image data URL
-        els.pdfPreview.innerHTML = `<img src="${preview}" style="max-width: 100%; height: auto;" />`;
-      } else if (typeof preview === 'string') {
-        // Object URL
-        els.pdfPreview.innerHTML = `<iframe src="${preview}" style="width: 100%; height: 100%; border: none;"></iframe>`;
-      }
-      els.pdfPreview.classList.remove("hidden");
-    } catch (error) {
-      log(`⚠️ Preview error: ${error.message}`);
-      els.pdfPreview.innerHTML = `<p style="opacity: 0.6; text-align: center; padding: 20px;">PDF loaded but preview unavailable</p>`;
+  try {
+    const preview = await pdfProcessor.renderPdfPreview(file, els.pdfCanvas);
+    if (typeof preview === 'string' && preview.startsWith('data:')) {
+      // Image data URL
+      els.pdfPreview.innerHTML = `<img src="${preview}" style="max-width: 100%; height: auto;" />`;
+    } else if (typeof preview === 'string') {
+      // Object URL
+      els.pdfPreview.innerHTML = `<iframe src="${preview}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+    }
+    els.pdfPreview.classList.remove("hidden");
+  } catch (error) {
+    log(`⚠️ Preview error: ${error.message}`);
+    els.pdfPreview.innerHTML = `<p style="opacity: 0.6; text-align: center; padding: 20px;">PDF loaded but preview unavailable</p>`;
     }
   }
   
@@ -1189,12 +1189,12 @@ els.processBtn.addEventListener("click", async () => {
           userSettings.ocrQuality || 'balanced',
           currentAbortController ? currentAbortController.signal : null
         );
-        addProgressSubStep('OCR Processing', `✅ OCR completed on full PDF`);
-        addProgressSubStep('OCR Processing', `Model used: ${ocrResult.model || 'unknown'}`);
-        addProgressSubStep('OCR Processing', `Confidence: ${(ocrResult.confidence * 100).toFixed(1)}%`);
-        log(`✅ OCR completed on full PDF`);
-        log(`📊 Model used: ${ocrResult.model || 'unknown'}`);
-        log(`📊 Confidence: ${(ocrResult.confidence * 100).toFixed(1)}%`);
+      addProgressSubStep('OCR Processing', `✅ OCR completed on full PDF`);
+      addProgressSubStep('OCR Processing', `Model used: ${ocrResult.model || 'unknown'}`);
+      addProgressSubStep('OCR Processing', `Confidence: ${(ocrResult.confidence * 100).toFixed(1)}%`);
+      log(`✅ OCR completed on full PDF`);
+      log(`📊 Model used: ${ocrResult.model || 'unknown'}`);
+      log(`📊 Confidence: ${(ocrResult.confidence * 100).toFixed(1)}%`);
       } finally {
         // Останавливаем таймер в любом случае (успех или ошибка)
         if (statusTimer) {
@@ -1382,11 +1382,11 @@ function renderResults() {
   // По умолчанию показываем переведенную версию, если доступна
   const isTranslatedMode = translatedText && translatedText !== originalText;
   
-  html += `<div id="rawTextContent" style="margin-top: 5px; font-size: 0.75rem; opacity: 0.8; max-height: 300px; overflow-y: auto; border: 1px solid var(--ui-color); padding: 5px; white-space: pre-wrap; word-wrap: break-word;">`;
+  html += `<div id="rawTextContent" style="margin-top: 5px; font-size: 0.75rem; opacity: 0.8; max-height: 400px; overflow-y: auto; border: 1px solid var(--ui-color); padding: 5px; white-space: pre-wrap; word-wrap: break-word;">`;
   const initialText = isTranslatedMode ? translatedText : originalText;
   if (initialText) {
-    // Показываем полный текст (или до 5000 символов для производительности)
-    const displayText = initialText.length > 5000 ? initialText.substring(0, 5000) + '\n\n... (текст обрезан, полный текст доступен в экспорте)' : initialText;
+    // Показываем полный текст (или до 10000 символов для производительности)
+    const displayText = initialText.length > 10000 ? initialText.substring(0, 10000) + '\n\n... (текст обрезан, полный текст доступен в экспорте)' : initialText;
     html += displayText.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
   } else {
     html += isTranslatedMode ? 'Переведенный текст недоступен' : 'Оригинальный текст недоступен';
@@ -1415,7 +1415,11 @@ function renderResults() {
       rawTextToggle.textContent = label;
       
       if (textToShow) {
-        rawTextContent.textContent = textToShow.length > 1000 ? textToShow.substring(0, 1000) + '...' : textToShow;
+        // Показываем полный текст (или до 10000 символов для производительности)
+        const displayText = textToShow.length > 10000 ? textToShow.substring(0, 10000) + '\n\n... (текст обрезан, полный текст доступен в экспорте)' : textToShow;
+        rawTextContent.textContent = displayText;
+      } else {
+        rawTextContent.textContent = showingOriginal ? 'Оригинальный текст недоступен' : 'Переведенный текст недоступен';
       }
       
       playClick(250);
