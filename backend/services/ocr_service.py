@@ -29,7 +29,7 @@ except ImportError:
     PDF2IMAGE_AVAILABLE = False
 
 from services.logger import ocr_logger, log_ocr_request, log_ocr_result
-from services.ocr_agent import OCRSelectionAgent, PDFType, OCRMethod, OCRQuality
+from services.ocr_agent import OCRSelectionAgent, PDFType, OCRMethod, OCRQuality, TextType
 
 # OpenRouter будет использоваться через OpenRouterService
 # Groq полностью отключен
