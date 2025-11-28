@@ -1525,15 +1525,25 @@ els.chatSendBtn.addEventListener("click", async () => {
   playClick(400);
   
   try {
-    // Получаем извлеченный текст из extractedData или из результатов
+    // Получаем извлеченный текст из ocrResult или extractedData
     let extractedText = '';
-    if (extractedData && typeof extractedData === 'object') {
-      extractedText = extractedData.text || JSON.stringify(extractedData);
-    } else if (extractedData) {
+    
+    // Пробуем получить текст из ocrResult (глобальная переменная из processBtn)
+    if (typeof ocrResult !== 'undefined' && ocrResult && ocrResult.text) {
+      extractedText = ocrResult.text;
+    } else if (extractedData && typeof extractedData === 'object') {
+      // Если extractedData - объект с данными
+      if (extractedData.text) {
+        extractedText = extractedData.text;
+      } else {
+        // Пытаемся собрать весь текст из всех полей
+        extractedText = JSON.stringify(extractedData);
+      }
+    } else if (extractedData && typeof extractedData === 'string') {
       extractedText = extractedData;
     }
     
-    // Также пытаемся получить текст из панели результатов
+    // Fallback: пытаемся получить текст из панели результатов
     if (!extractedText && els.extractedData) {
       const extractedElement = els.extractedData.querySelector('pre, p');
       if (extractedElement) {
