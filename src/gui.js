@@ -2259,15 +2259,38 @@ async function loadFileFromCloud(url, fileName) {
       throw new Error('Downloaded file is empty');
     }
     
-    // Check if blob is actually a PDF (check first bytes)
-    if (fileName.match(/\.pdf$/i)) {
-      const firstBytes = await blob.slice(0, 4).arrayBuffer();
-      const pdfHeader = new Uint8Array(firstBytes);
-      const isPdf = pdfHeader[0] === 0x25 && pdfHeader[1] === 0x50 && pdfHeader[2] === 0x44 && pdfHeader[3] === 0x46; // %PDF
+    // Определяем реальный тип файла по первым байтам (magic numbers) ДО обработки
+    const firstBytes = await blob.slice(0, 12).arrayBuffer();
+    const uint8Array = new Uint8Array(firstBytes);
+    const fileSignature = Array.from(uint8Array.slice(0, 4));
+    
+    // PDF: %PDF (0x25 0x50 0x44 0x46)
+    const isPdfBySignature = fileSignature[0] === 0x25 && fileSignature[1] === 0x50 && 
+                  fileSignature[2] === 0x44 && fileSignature[3] === 0x46;
+    
+    // PNG: PNG signature (0x89 0x50 0x4E 0x47)
+    const isPngBySignature = fileSignature[0] === 0x89 && fileSignature[1] === 0x50 && 
+                  fileSignature[2] === 0x4E && fileSignature[3] === 0x47;
+    
+    // JPEG: JFIF (0xFF 0xD8 0xFF)
+    const isJpegBySignature = fileSignature[0] === 0xFF && fileSignature[1] === 0xD8 && 
+                   fileSignature[2] === 0xFF;
+    
+    console.log('File signature:', fileSignature.map(b => `0x${b.toString(16)}`).join(' '));
+    console.log('Detected type by signature:', { isPdfBySignature, isPngBySignature, isJpegBySignature, fileName });
+    
+    // Используем реальный тип файла, а не только расширение
+    const actualIsPdf = isPdfBySignature;
+    const actualIsImage = isPngBySignature || isJpegBySignature;
+    
+    // Если файл PDF по сигнатуре, но имеет расширение изображения - обрабатываем как PDF
+    if (actualIsPdf) {
+      console.log(`File is PDF by signature, treating as PDF regardless of extension: ${fileName}`);
       
-      if (!isPdf) {
-        console.warn('File does not appear to be a valid PDF (missing %PDF header)');
-        log(`⚠️ Warning: File may not be a valid PDF`);
+      // Check if blob is actually a PDF (check first bytes)
+      if (!fileName.match(/\.pdf$/i)) {
+        console.warn(`File has PDF signature but image extension: ${fileName}. Treating as PDF.`);
+        log(`⚠️ File has PDF signature but image extension, treating as PDF: ${fileName}`);
       }
       
       const file = new File([blob], fileName, { type: 'application/pdf' });
@@ -2342,15 +2365,15 @@ async function loadFileFromCloud(url, fileName) {
         try {
           console.log(`Image loaded successfully: ${img.width}x${img.height}`);
           
-          // Create a canvas and draw the image
-          const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0);
-          
-          // Render directly on PDF canvas
-          renderImageOnCanvas(canvas);
+        // Create a canvas and draw the image
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        
+        // Render directly on PDF canvas
+        renderImageOnCanvas(canvas);
           
           // Show preview - используем imgUrl, который будет валиден до revokeObjectURL
           els.pdfPreview.innerHTML = `<img src="${imgUrl}" style="max-width: 100%; height: auto; max-height: 600px;" />`;
@@ -2366,7 +2389,7 @@ async function loadFileFromCloud(url, fileName) {
           
           // Не отзываем URL сразу - дадим время для отображения изображения
           setTimeout(() => {
-            URL.revokeObjectURL(imgUrl);
+        URL.revokeObjectURL(imgUrl);
           }, 1000);
         } catch (error) {
           console.error('Error processing loaded image:', error);
