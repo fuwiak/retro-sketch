@@ -90,6 +90,7 @@ let humAudio = null;
 let currentPdfFile = null;
 let extractedData = null;
 let translatedData = null;
+let ocrResult = null; // Глобальная переменная для доступа из чата
 let steelEquivData = {};
 let cropMode = false;
 let cropModeType = 'polygon'; // 'polygon' or 'rectangle'
@@ -1525,31 +1526,66 @@ els.chatSendBtn.addEventListener("click", async () => {
   playClick(400);
   
   try {
-    // Получаем извлеченный текст из ocrResult или extractedData
+    // Получаем извлеченный текст из разных источников
     let extractedText = '';
     
-    // Пробуем получить текст из ocrResult (глобальная переменная из processBtn)
-    if (typeof ocrResult !== 'undefined' && ocrResult && ocrResult.text) {
+    // Приоритет 1: ocrResult.text - оригинальный текст из OCR
+    if (ocrResult && ocrResult.text) {
       extractedText = ocrResult.text;
-    } else if (extractedData && typeof extractedData === 'object') {
-      // Если extractedData - объект с данными
-      if (extractedData.text) {
-        extractedText = extractedData.text;
-      } else {
-        // Пытаемся собрать весь текст из всех полей
-        extractedText = JSON.stringify(extractedData);
+      log(`💬 Используем текст из ocrResult (${extractedText.length} символов)`);
+    }
+    // Приоритет 2: translatedData.rawText - текст из PROCESSING RESULTS
+    else if (translatedData && translatedData.rawText) {
+      extractedText = translatedData.rawText;
+      log(`💬 Используем текст из translatedData.rawText (${extractedText.length} символов)`);
+    }
+    // Приоритет 3: extractedData.rawText - если есть
+    else if (extractedData && extractedData.rawText) {
+      extractedText = extractedData.rawText;
+      log(`💬 Используем текст из extractedData.rawText (${extractedText.length} символов)`);
+    }
+    // Приоритет 4: Собираем текст из extractedData (структурированные данные)
+    else if (extractedData && typeof extractedData === 'object') {
+      // Собираем весь текст из всех полей extractedData
+      const textParts = [];
+      if (extractedData.materials && extractedData.materials.length > 0) {
+        textParts.push(`Материалы: ${extractedData.materials.join(', ')}`);
       }
-    } else if (extractedData && typeof extractedData === 'string') {
-      extractedText = extractedData;
+      if (extractedData.standards && extractedData.standards.length > 0) {
+        textParts.push(`Стандарты: ${extractedData.standards.join(', ')}`);
+      }
+      if (extractedData.raValues && extractedData.raValues.length > 0) {
+        textParts.push(`Шероховатость: Ra ${extractedData.raValues.join(', Ra ')}`);
+      }
+      if (extractedData.fits && extractedData.fits.length > 0) {
+        textParts.push(`Посадки: ${extractedData.fits.join(', ')}`);
+      }
+      if (extractedData.heatTreatment && extractedData.heatTreatment.length > 0) {
+        textParts.push(`Термообработка: ${extractedData.heatTreatment.join(', ')}`);
+      }
+      extractedText = textParts.join('\n') || JSON.stringify(extractedData);
+      log(`💬 Используем собранный текст из extractedData (${extractedText.length} символов)`);
+    }
+    // Fallback: пытаемся получить текст из панели PROCESSING RESULTS
+    if (!extractedText || extractedText.length < 10) {
+      if (els.resultsList) {
+        const rawTextElement = els.resultsList.querySelector('div[style*="Raw OCR Text"], div[style*="rawText"]');
+        if (rawTextElement) {
+          const rawTextDiv = rawTextElement.nextElementSibling || rawTextElement.querySelector('div');
+          if (rawTextDiv) {
+            extractedText = rawTextDiv.textContent || rawTextDiv.innerText;
+            log(`💬 Используем текст из панели PROCESSING RESULTS (${extractedText.length} символов)`);
+          }
+        }
+      }
     }
     
-    // Fallback: пытаемся получить текст из панели результатов
-    if (!extractedText && els.extractedData) {
-      const extractedElement = els.extractedData.querySelector('pre, p');
-      if (extractedElement) {
-        extractedText = extractedElement.textContent || extractedElement.innerText;
-      }
+    // Проверяем, что у нас есть текст
+    if (!extractedText || extractedText.trim().length === 0) {
+      throw new Error("Не удалось найти извлеченный текст. Пожалуйста, сначала обработайте файл через OCR.");
     }
+    
+    log(`💬 Отправляем ${extractedText.length} символов текста в AI для ответа на вопрос`);
     
     // Отправляем вопрос на backend
     // Note: getApiBaseUrl() already includes /api, so we don't add it again
