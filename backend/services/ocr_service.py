@@ -393,7 +393,8 @@ class OCRService:
             "metadata": {
                 "languages": languages,
                 "file_type": file_type,
-                "method_used": processing_info["method"]
+                "method_used": processing_info["method"],
+                "text_type": text_type.value if text_type else "unknown"
             },
             "processing_info": processing_info
         }
