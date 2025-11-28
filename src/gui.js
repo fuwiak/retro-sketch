@@ -79,6 +79,11 @@ const els = {
   testTelegramBtn: document.getElementById("testTelegramBtn"),
   telegramStatus: document.getElementById("telegramStatus"),
   telegramHistory: document.getElementById("telegramHistory"),
+  chatToggle: document.getElementById("chatToggle"),
+  chatDrawer: document.getElementById("chatDrawer"),
+  chatMessages: document.getElementById("chatMessages"),
+  chatInput: document.getElementById("chatInput"),
+  chatSendBtn: document.getElementById("chatSendBtn"),
 };
 
 let humAudio = null;
@@ -1485,6 +1490,93 @@ els.searchSteelBtn.addEventListener("click", async () => {
 els.telegramToggle.addEventListener("click", () => {
   els.telegramDrawer.classList.toggle("open");
   playClick(400);
+});
+
+// ========== CHAT FOR QUESTIONS ==========
+els.chatToggle.addEventListener("click", () => {
+  els.chatDrawer.classList.toggle("open");
+  playClick(400);
+});
+
+els.chatSendBtn.addEventListener("click", async () => {
+  const question = els.chatInput.value.trim();
+  if (!question) {
+    playClick(250);
+    return;
+  }
+  
+  if (!currentPdfFile && !extractedData) {
+    log("❌ Сначала загрузите и обработайте файл");
+    playClick(250);
+    return;
+  }
+  
+  // Добавляем вопрос пользователя в чат
+  const userMessage = document.createElement('div');
+  userMessage.className = 'chat-message user';
+  userMessage.innerHTML = `<strong>Вы:</strong><br>${question}`;
+  els.chatMessages.appendChild(userMessage);
+  els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+  
+  els.chatInput.value = '';
+  els.status.textContent = "🤔 Отправка вопроса...";
+  log(`💬 Вопрос: ${question}`);
+  
+  playClick(400);
+  
+  try {
+    // Получаем извлеченный текст
+    const extractedText = extractedData ? JSON.stringify(extractedData) : '';
+    
+    // Отправляем вопрос на backend
+    const response = await fetch(`${API_BASE_URL}/api/openrouter/ask-question`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        question: question,
+        extracted_text: extractedText
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    
+    // Добавляем ответ AI в чат
+    const assistantMessage = document.createElement('div');
+    assistantMessage.className = 'chat-message assistant';
+    assistantMessage.innerHTML = `<strong>AI:</strong><br>${result.answer || 'Ответ не получен'}`;
+    els.chatMessages.appendChild(assistantMessage);
+    els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+    
+    els.status.textContent = "✅ Ответ получен";
+    log(`✅ Ответ получен: ${(result.answer || '').substring(0, 100)}...`);
+    playTeleportFX();
+    
+  } catch (error) {
+    console.error('Chat error:', error);
+    const errorMessage = document.createElement('div');
+    errorMessage.className = 'chat-message';
+    errorMessage.style.borderLeftColor = 'rgba(255, 0, 0, 0.5)';
+    errorMessage.innerHTML = `<strong>Ошибка:</strong><br>${error.message}`;
+    els.chatMessages.appendChild(errorMessage);
+    els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+    
+    els.status.textContent = `❌ Ошибка: ${error.message}`;
+    log(`❌ Ошибка чата: ${error.message}`);
+    playClick(250);
+  }
+});
+
+// Enter key для отправки вопроса
+els.chatInput.addEventListener("keypress", (e) => {
+  if (e.key === "Enter") {
+    els.chatSendBtn.click();
+  }
 });
 
 els.testTelegramBtn.addEventListener("click", async () => {

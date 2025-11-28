@@ -1091,6 +1091,63 @@ class OpenRouterService:
         api_logger.error("All models failed to translate")
         return None
     
+    async def ask_question(self, prompt: str, model: Optional[str] = None) -> Optional[str]:
+        """
+        Задать вопрос через OpenRouter текстовую модель
+        """
+        if not self.api_key:
+            api_logger.warning("OpenRouter API key not found")
+            return None
+        
+        model_to_use = model or DEFAULT_TEXT_MODEL
+        
+        try:
+            url = self.api_url
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "http://localhost:5000",
+                "X-Title": "Retro Drawing Analyzer"
+            }
+            
+            payload = {
+                "model": model_to_use,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "Ты эксперт по техническим чертежам и машиностроению. Отвечай подробно и точно на вопросы о чертежах, используя информацию из предоставленного текста."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.3,
+                "max_tokens": 2000
+            }
+            
+            api_logger.info(f"Задаем вопрос через модель {model_to_use}")
+            
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(url, headers=headers, json=payload)
+                
+                if response.status_code != 200:
+                    api_logger.error(f"Model {model_to_use} failed: HTTP {response.status_code}")
+                    return None
+                
+                result = response.json()
+                content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+                
+                if content:
+                    api_logger.info(f"✅ Ответ получен: {len(content)} символов")
+                    return content
+                
+                return None
+                
+        except Exception as e:
+            api_logger.error(f"Error asking question: {e}")
+            return None
+    
     def _apply_technical_glossary(self, text: str) -> str:
         """Apply technical glossary for better translation"""
         glossary = {

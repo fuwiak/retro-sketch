@@ -259,6 +259,75 @@ class TextExtractionRequest(BaseModel):
     model: Optional[str] = None
 
 
+class QuestionRequest(BaseModel):
+    question: str
+    file_content: Optional[str] = None  # Base64 encoded file (PDF/image)
+    extracted_text: Optional[str] = None  # Already extracted text from OCR
+    file_type: Optional[str] = None
+
+
+@app.post("/api/openrouter/ask-question")
+async def ask_question_about_file(request: QuestionRequest):
+    """
+    Задать вопрос о файле через AI модель
+    Использует OpenRouter для ответа на вопросы о техническом чертеже
+    """
+    start_time = time.time()
+    log_api_request("POST", "/api/openrouter/ask-question", {})
+    
+    try:
+        if not openrouter_service.is_available():
+            raise HTTPException(
+                status_code=503,
+                detail="OpenRouter API key not configured. Please set OPENROUTER_API_KEY in environment variables."
+            )
+        
+        api_logger.info(f"Question received: {request.question[:100]}...")
+        
+        # Формируем промпт с контекстом
+        if request.extracted_text:
+            context = f"""Текст, извлеченный из технического чертежа:
+{request.extracted_text[:3000]}
+
+"""
+        else:
+            context = ""
+        
+        prompt = f"""{context}Вопрос о техническом чертеже: {request.question}
+
+Ответь подробно и точно, используя информацию из чертежа."""
+        
+        # Используем текстовую модель для ответа на вопрос
+        result_text = await openrouter_service.ask_question(prompt)
+        
+        if not result_text:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to get answer from AI model"
+            )
+        
+        response_time = time.time() - start_time
+        log_api_response("POST", "/api/openrouter/ask-question", 200, response_time)
+        
+        return {
+            "success": True,
+            "answer": result_text,
+            "processing_time": response_time
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        response_time = time.time() - start_time
+        log_api_response("POST", "/api/openrouter/ask-question", 500, response_time)
+        api_logger.error(f"Question failed - Error: {str(e)}", exc_info=True)
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"Question failed: {str(e)}"
+        )
+
+
 @app.post("/api/openrouter/extract-text")
 async def extract_text_from_sketch(request: TextExtractionRequest):
     """

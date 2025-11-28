@@ -75,6 +75,7 @@
         transition: all 0.4s ease, opacity 0.3s;
         overflow: hidden;
         position: relative;
+        border-radius: 12px; /* macOS Dock стиль */
       }
       #pdfPreview.hidden {
         max-height: 0;
@@ -110,6 +111,7 @@
         min-width: 10px;
         min-height: 10px;
         position: absolute;
+        border-radius: 8px; /* macOS Dock стиль */
       }
       
       #polygonCanvas {
@@ -203,6 +205,7 @@
         max-width: 600px;
         background: rgba(0, 0, 0, 0.85);
         position: relative;
+        border-radius: 12px; /* macOS Dock стиль */
       }
 
       .panel h2 {
@@ -245,6 +248,7 @@
         transition: all 0.3s ease;
         writing-mode: vertical-rl;
         text-orientation: mixed;
+        border-radius: 8px; /* macOS Dock стиль */
       }
       #progressToggle:hover {
         background: var(--ui-color);
@@ -263,6 +267,7 @@
         font-size: 0.8rem;
         padding: 3px 8px;
         cursor: pointer;
+        border-radius: 8px; /* macOS Dock стиль */
         text-shadow: 0 0 4px var(--ui-color);
         z-index: 120;
         transition: all 0.3s ease;
@@ -405,6 +410,7 @@
         font-size: 0.8rem;
         padding: 3px 8px;
         cursor: pointer;
+        border-radius: 8px; /* macOS Dock стиль */
         text-shadow: 0 0 4px var(--ui-color);
         z-index: 120;
         transition: all 0.3s ease;
@@ -463,6 +469,7 @@
         font-size: 0.8rem;
         padding: 3px 8px;
         cursor: pointer;
+        border-radius: 8px; /* macOS Dock стиль */
         text-shadow: 0 0 4px var(--ui-color);
         z-index: 120;
         transition: all 0.3s ease;
@@ -515,6 +522,7 @@
         font-size: 0.8rem;
         padding: 3px 8px;
         cursor: pointer;
+        border-radius: 8px; /* macOS Dock стиль */
         text-shadow: 0 0 4px var(--ui-color);
         z-index: 120;
         transition: all 0.3s ease;
@@ -554,6 +562,91 @@
         border-bottom: 1px solid var(--ui-color);
         text-align: center;
         margin-bottom: 5px;
+      }
+
+      /* CHAT DRAWER */
+      #chatToggle {
+        position: fixed;
+        top: 5px;
+        right: 10px;
+        border: 1px solid var(--ui-color);
+        color: var(--ui-color);
+        background: rgba(0, 0, 0, 0.6);
+        font-size: 0.8rem;
+        padding: 3px 8px;
+        cursor: pointer;
+        text-shadow: 0 0 4px var(--ui-color);
+        z-index: 120;
+        transition: all 0.3s ease;
+        border-radius: 8px; /* macOS Dock стиль */
+      }
+      #chatToggle:hover {
+        background: var(--ui-color);
+        color: #000;
+        transform: scale(1.05);
+      }
+      #chatDrawer {
+        position: fixed;
+        top: 40px;
+        right: 10px;
+        width: 450px;
+        height: 500px;
+        background: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(30px) saturate(180%);
+        -webkit-backdrop-filter: blur(30px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20px; /* macOS Dock стиль */
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5),
+                    0 0 20px rgba(255, 0, 0, 0.3),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        padding: 0.5rem;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 115;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        transform: translateY(-100vh);
+        opacity: 0;
+      }
+      #chatDrawer.open {
+        transform: translateY(0);
+        opacity: 1;
+      }
+      #chatDrawer h2 {
+        font-size: 0.9rem;
+        border-bottom: 1px solid var(--ui-color);
+        text-align: center;
+        margin-bottom: 5px;
+        padding-bottom: 5px;
+      }
+      #chatMessages {
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.3);
+      }
+      .chat-message {
+        margin: 8px 0;
+        padding: 8px;
+        border-radius: 8px;
+        background: rgba(255, 0, 0, 0.1);
+        border-left: 2px solid var(--ui-color);
+      }
+      .chat-message.user {
+        background: rgba(255, 0, 0, 0.15);
+      }
+      .chat-message.assistant {
+        background: rgba(0, 255, 0, 0.1);
+        border-left-color: rgba(0, 255, 0, 0.5);
+      }
+      #chatInput {
+        border-radius: 8px; /* macOS Dock стиль */
+      }
+      #chatSendBtn {
+        border-radius: 8px; /* macOS Dock стиль */
+      }
+      #chatSendBtn:hover {
+        background: var(--ui-color);
+        color: #000;
       }
 
 
@@ -846,6 +939,19 @@
       </div>
       <div id="telegramStatus" style="font-size: 0.75rem; color: var(--ui-color); opacity: 0.7; margin-bottom: 5px; text-align: center;"></div>
       <div id="telegramHistory" style="flex: 1; overflow-y: auto; font-size: 0.8rem;"></div>
+    </div>
+
+    <!-- CHAT DRAWER FOR QUESTIONS -->
+    <div id="chatToggle">💬 ВОПРОСЫ</div>
+    <div id="chatDrawer">
+      <h2>💬 Вопросы по файлу</h2>
+      <div id="chatMessages" style="flex: 1; overflow-y: auto; font-size: 0.85rem; margin-bottom: 10px; padding: 5px; min-height: 300px; max-height: 400px;">
+        <p style="opacity: 0.6; text-align: center; padding: 20px;">Задайте вопрос о загруженном файле...</p>
+      </div>
+      <div style="display: flex; gap: 5px;">
+        <input id="chatInput" placeholder="Введите вопрос о файле..." style="flex: 1; background: rgba(0, 0, 0, 0.8); border: 1px solid var(--ui-color); color: var(--ui-color); padding: 5px; font-family: inherit; font-size: 0.85rem; border-radius: 8px;" />
+        <button id="chatSendBtn" style="background: rgba(0, 0, 0, 0.8); border: 1px solid var(--ui-color); color: var(--ui-color); padding: 5px 15px; font-family: inherit; font-size: 0.85rem; cursor: pointer; border-radius: 8px;">Отправить</button>
+      </div>
     </div>
 
     <!-- MODAL DETAIL VIEWER -->
