@@ -594,32 +594,37 @@ class OpenRouterService:
             
             # Конвертируем в numpy array для обработки
             if OPENCV_AVAILABLE and NUMPY_AVAILABLE:
-                import cv2
-                # Конвертируем PIL в numpy
-                img_array = np.array(image)
-                
-                # Конвертируем в grayscale
-                gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
-                
-                # Применяем адаптивную бинаризацию (Оtsu или адаптивная)
-                # Это критически важно для чертежей с разным освещением
-                binary = cv2.adaptiveThreshold(
-                    gray, 255, 
-                    cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                    cv2.THRESH_BINARY, 
-                    11, 2
-                )
-                
-                # Улучшаем контраст еще раз
-                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-                binary = clahe.apply(binary)
-                
-                # Убираем шум
-                binary = cv2.medianBlur(binary, 3)
-                
-                # Конвертируем обратно в PIL
-                image = Image.fromarray(binary)
-                api_logger.info("   🔬 Применена адаптивная бинаризация (OpenCV)")
+                try:
+                    import cv2
+                    import numpy as np
+                    # Конвертируем PIL в numpy
+                    img_array = np.array(image)
+                    
+                    # Конвертируем в grayscale
+                    gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+                    
+                    # Применяем адаптивную бинаризацию (Оtsu или адаптивная)
+                    # Это критически важно для чертежей с разным освещением
+                    binary = cv2.adaptiveThreshold(
+                        gray, 255, 
+                        cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                        cv2.THRESH_BINARY, 
+                        11, 2
+                    )
+                    
+                    # Улучшаем контраст еще раз
+                    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+                    binary = clahe.apply(binary)
+                    
+                    # Убираем шум
+                    binary = cv2.medianBlur(binary, 3)
+                    
+                    # Конвертируем обратно в PIL
+                    image = Image.fromarray(binary)
+                    api_logger.info("   🔬 Применена адаптивная бинаризация (OpenCV)")
+                except (ImportError, OSError, AttributeError) as e:
+                    api_logger.debug(f"   ⚠️ OpenCV недоступен для бинаризации: {e}")
+                    # Fallback без OpenCV - используем PIL методы
             else:
                 # Fallback без OpenCV - используем PIL методы
                 image = image.convert('L')  # Grayscale
