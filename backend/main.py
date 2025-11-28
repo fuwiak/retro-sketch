@@ -85,12 +85,12 @@ async def health():
 async def process_ocr(
     request: Request,
     file: UploadFile = File(...),
-    languages: str = Form("rus+eng")
+    languages: str = Form("rus+eng"),
+    model: Optional[str] = Form(None),
+    temperature: float = Form(0.0)
 ):
     """
-    Process PDF or image file with OCR using intelligent method selection.
-    AI agent evaluates file complexity and estimated processing time,
-    then selects optimal method (LLM Groq or Tesseract OCR).
+    Process PDF or image file with OCR using OpenRouter vision models.
     Supports multiple languages (rus+eng, eng, rus, etc.)
     """
     start_time = time.time()
@@ -99,7 +99,7 @@ async def process_ocr(
     try:
         # Log API request
         log_api_request("POST", "/api/ocr/process", client_ip)
-        api_logger.info(f"OCR request received - File: {file.filename}, Languages: {languages}")
+        api_logger.info(f"OCR request received - File: {file.filename}, Languages: {languages}, Model: {model}")
         
         # Parse languages
         lang_list = languages.split("+") if "+" in languages else [languages]
@@ -110,11 +110,13 @@ async def process_ocr(
         
         api_logger.info(f"File read - Size: {len(file_content) / 1024:.1f}KB, Type: {file_type}")
         
-        # Process with OCR (agent automatically selects best method)
+        # Process with OCR using OpenRouter
         result = await ocr_service.process_file(
             file_content=file_content,
             file_type=file_type,
-            languages=lang_list
+            languages=lang_list,
+            model=model,
+            temperature=temperature
         )
         
         # Extract processing info
@@ -365,19 +367,23 @@ class TranslationRequest(BaseModel):
     text: str
     from_lang: str = "ru"
     to_lang: str = "en"
+    model: Optional[str] = None
+    temperature: float = 0.3
 
 
 @app.post("/api/translate")
 async def translate_text(request: TranslationRequest):
     """
     Translate text from one language to another
-    Uses technical glossary and Groq AI
+    Uses technical glossary and OpenRouter
     """
     try:
         translated = await translation_service.translate(
             text=request.text,
             from_lang=request.from_lang,
-            to_lang=request.to_lang
+            to_lang=request.to_lang,
+            model=request.model,
+            temperature=request.temperature
         )
         
         return {

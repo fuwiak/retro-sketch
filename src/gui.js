@@ -73,6 +73,13 @@ const els = {
   testTelegramBtn: document.getElementById("testTelegramBtn"),
   telegramStatus: document.getElementById("telegramStatus"),
   telegramHistory: document.getElementById("telegramHistory"),
+  openRouterToggle: document.getElementById("openRouterToggle"),
+  openRouterDrawer: document.getElementById("openRouterDrawer"),
+  openRouterModel: document.getElementById("openRouterModel"),
+  openRouterTemperature: document.getElementById("openRouterTemperature"),
+  openRouterPrompt: document.getElementById("openRouterPrompt"),
+  openRouterStatus: document.getElementById("openRouterStatus"),
+  saveOpenRouterSettings: document.getElementById("saveOpenRouterSettings"),
 };
 
 let humAudio = null;
@@ -102,6 +109,9 @@ let userSettings = {
   exportDocx: true,
   exportXlsx: true,
   exportPdf: true,
+  openRouterModel: "google/gemini-2.0-flash-001",
+  openRouterTemperature: 0.0,
+  openRouterPrompt: "",
 };
 
 // ========== AUDIO ==========
@@ -1033,7 +1043,13 @@ els.processBtn.addEventListener("click", async () => {
           log(`📝 ${msg}`);
         };
         
-        ocrResult = await pdfProcessor.processPdfWithOCR(croppedFile, languages, progressCallback);
+        ocrResult = await pdfProcessor.processPdfWithOCR(
+          croppedFile, 
+          languages, 
+          progressCallback,
+          userSettings.openRouterModel,
+          userSettings.openRouterTemperature
+        );
         ocrResult.isCropped = true;
         addProgressSubStep('OCR Processing', `✅ OCR completed on cropped area`);
         addProgressSubStep('OCR Processing', `Model used: ${ocrResult.model || 'unknown'}`);
@@ -1045,7 +1061,13 @@ els.processBtn.addEventListener("click", async () => {
         log(`⚠️ Failed to extract cropped image, falling back to full PDF`);
         addProgressSubStep('OCR Processing', `⚠️ Failed to extract, falling back to full PDF`);
         updateProgress('OCR Processing', 'active', `Fallback: Processing full PDF...`);
-        ocrResult = await pdfProcessor.processPdfWithOCR(currentPdfFile, languages);
+        ocrResult = await pdfProcessor.processPdfWithOCR(
+          currentPdfFile, 
+          languages,
+          null,
+          userSettings.openRouterModel,
+          userSettings.openRouterTemperature
+        );
       }
     } else {
       // Use full PDF
@@ -1073,7 +1095,13 @@ els.processBtn.addEventListener("click", async () => {
         log(`📝 ${msg}`);
       };
       
-      ocrResult = await pdfProcessor.processPdfWithOCR(currentPdfFile, languages, progressCallback);
+      ocrResult = await pdfProcessor.processPdfWithOCR(
+        currentPdfFile, 
+        languages, 
+        progressCallback,
+        userSettings.openRouterModel,
+        userSettings.openRouterTemperature
+      );
       addProgressSubStep('OCR Processing', `✅ OCR completed on full PDF`);
       addProgressSubStep('OCR Processing', `Model used: ${ocrResult.model || 'unknown'}`);
       addProgressSubStep('OCR Processing', `Confidence: ${(ocrResult.confidence * 100).toFixed(1)}%`);
@@ -1098,7 +1126,11 @@ els.processBtn.addEventListener("click", async () => {
     if (userSettings.autoTranslate) {
       updateProgress('Translation', 'active', 'Translating to English with technical glossary...');
       els.status.textContent = "⏳ Translating...";
-      translatedData = await translator.translateExtractedData(extractedData);
+      translatedData = await translator.translateExtractedData(
+        extractedData,
+        userSettings.openRouterModel,
+        userSettings.openRouterTemperature
+      );
       updateProgress('Translation', 'completed', 'Translation completed');
       log("🌐 Translation completed");
     } else {
@@ -1363,6 +1395,31 @@ els.searchSteelBtn.addEventListener("click", async () => {
   
   els.steelResults.innerHTML = html;
     playTeleportFX();
+});
+
+// ========== OPENROUTER DRAWER ==========
+els.openRouterToggle.addEventListener("click", () => {
+  els.openRouterDrawer.classList.toggle("open");
+  playClick(400);
+  
+  // Load current settings
+  if (els.openRouterModel) els.openRouterModel.value = userSettings.openRouterModel || "google/gemini-2.0-flash-001";
+  if (els.openRouterTemperature) els.openRouterTemperature.value = userSettings.openRouterTemperature || 0.0;
+  if (els.openRouterPrompt) els.openRouterPrompt.value = userSettings.openRouterPrompt || "";
+});
+
+els.saveOpenRouterSettings.addEventListener("click", () => {
+  userSettings.openRouterModel = els.openRouterModel.value;
+  userSettings.openRouterTemperature = parseFloat(els.openRouterTemperature.value) || 0.0;
+  userSettings.openRouterPrompt = els.openRouterPrompt.value;
+  
+  els.openRouterStatus.textContent = "✅ Настройки сохранены!";
+  log(`💾 OpenRouter настройки сохранены: модель=${userSettings.openRouterModel}, temperature=${userSettings.openRouterTemperature}`);
+  playTeleportFX();
+  
+  setTimeout(() => {
+    els.openRouterStatus.textContent = "";
+  }, 2000);
 });
 
 // ========== TELEGRAM DRAWER ==========

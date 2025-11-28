@@ -1,5 +1,5 @@
 // Translation Service with Technical Glossary
-// Translates Russian technical terms to English
+// Translates Russian technical terms to English using OpenRouter
 
 /**
  * Technical glossary for engineering/drawing terms
@@ -55,9 +55,9 @@ const TECHNICAL_GLOSSARY = {
 };
 
 /**
- * Translate text using Groq AI with technical glossary
+ * Translate text using OpenRouter API with technical glossary
  */
-export async function translateToEnglish(text, useGlossary = true) {
+export async function translateToEnglish(text, useGlossary = true, model = null, temperature = 0.3) {
   try {
     // First apply technical glossary
     let translated = text;
@@ -68,39 +68,33 @@ export async function translateToEnglish(text, useGlossary = true) {
       }
     }
     
-    // Use Groq AI for translation
+    // Use OpenRouter API for translation
+    const { API_BASE_URL } = await import('./config.js');
     try {
-      const { translateTechnicalText } = await import('./groqAgent.js');
-      const aiTranslated = await translateTechnicalText(translated, 'ru');
-      return aiTranslated;
-    } catch (groqError) {
-      console.warn('Groq translation failed, trying API fallback:', groqError);
+      const response = await fetch(`${API_BASE_URL}/translate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text: translated,
+          from_lang: 'ru',
+          to_lang: 'en',
+          model: model,
+          temperature: temperature
+        })
+      });
       
-      // Fallback to API
-      const { API_BASE_URL } = await import('./config.js');
-      try {
-        const response = await fetch(`${API_BASE_URL}/translate`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            text: translated,
-            from: 'ru',
-            to: 'en'
-          })
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          return result.translatedText || translated;
-        }
-      } catch (apiError) {
-        console.warn('Translation API also failed, using glossary only');
+      if (response.ok) {
+        const result = await response.json();
+        return result.translatedText || translated;
+      } else {
+        throw new Error(`Translation API error: ${response.status}`);
       }
+    } catch (apiError) {
+      console.warn('Translation API failed, using glossary only:', apiError);
+      return translated; // Return glossary-translated text if API fails
     }
-    
-    return translated;
   } catch (error) {
     console.error('Translation error:', error);
     return text; // Return original if translation fails
@@ -110,16 +104,15 @@ export async function translateToEnglish(text, useGlossary = true) {
 /**
  * Translate extracted data structure
  */
-export async function translateExtractedData(data) {
+export async function translateExtractedData(data, model = null, temperature = 0.3) {
   const translated = {
-    materials: await Promise.all(data.materials.map(m => translateToEnglish(m))),
-    standards: await Promise.all(data.standards.map(s => translateToEnglish(s))),
+    materials: await Promise.all(data.materials.map(m => translateToEnglish(m, true, model, temperature))),
+    standards: await Promise.all(data.standards.map(s => translateToEnglish(s, true, model, temperature))),
     raValues: data.raValues, // Numbers don't need translation
     fits: data.fits, // Already in standard format
-    heatTreatment: await Promise.all(data.heatTreatment.map(h => translateToEnglish(h))),
-    rawText: await translateToEnglish(data.rawText)
+    heatTreatment: await Promise.all(data.heatTreatment.map(h => translateToEnglish(h, true, model, temperature))),
+    rawText: await translateToEnglish(data.rawText, true, model, temperature)
   };
   
   return translated;
 }
-

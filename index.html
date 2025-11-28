@@ -479,25 +479,134 @@
         margin-bottom: 5px;
       }
 
+      /* OPENROUTER DRAWER */
+      #openRouterToggle {
+        position: fixed;
+        bottom: 5px;
+        left: 120px;
+        border: 3px solid #00ffff;
+        border-radius: 0;
+        color: #00ffff;
+        background: #0f0f1e;
+        font-size: 0.5em;
+        padding: 8px 12px;
+        cursor: pointer;
+        text-shadow: 
+          2px 2px 0 #000,
+          0 0 10px #00ffff;
+        z-index: 120;
+        transition: all 0.1s;
+        box-shadow: 
+          4px 4px 0 #000,
+          0 0 10px rgba(0,255,255,0.5);
+      }
+      #openRouterToggle:hover {
+        background: #00ffff;
+        color: #000;
+        transform: translate(2px, 2px);
+        box-shadow: 
+          2px 2px 0 #000,
+          0 0 20px rgba(0,255,255,0.8);
+      }
+      #openRouterToggle:active {
+        transform: translate(4px, 4px);
+        box-shadow: 0 0 0 #000;
+      }
+      #openRouterDrawer {
+        position: fixed;
+        left: 120px;
+        bottom: -450px;
+        width: 450px;
+        height: 450px;
+        background: #1a1a2e;
+        border: 4px solid #00ffff;
+        border-radius: 0;
+        box-shadow: 
+          4px 4px 0 #000,
+          0 0 20px #00ffff,
+          inset 0 0 20px rgba(0,255,255,0.1);
+        padding: 15px;
+        transition: bottom 0.4s ease;
+        z-index: 110;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+      }
+      #openRouterDrawer::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 2px,
+          rgba(0,255,255,0.1) 2px,
+          rgba(0,255,255,0.1) 4px
+        );
+        pointer-events: none;
+        opacity: 0.3;
+      }
+      #openRouterDrawer.open {
+        bottom: 40px;
+      }
+      #openRouterDrawer h2 {
+        font-size: 0.7em;
+        border-bottom: 3px solid #00ffff;
+        text-align: center;
+        margin-bottom: 10px;
+        padding-bottom: 10px;
+        text-shadow: 
+          2px 2px 0 #000,
+          0 0 10px #00ffff;
+        position: relative;
+        z-index: 1;
+      }
+      #openRouterDrawer select,
+      #openRouterDrawer input,
+      #openRouterDrawer textarea {
+        position: relative;
+        z-index: 1;
+      }
+      #openRouterDrawer button {
+        position: relative;
+        z-index: 1;
+      }
+
       /* TELEGRAM DRAWER */
       #telegramToggle {
         position: fixed;
         bottom: 5px;
         left: 10px;
-        border: 1px solid var(--ui-color);
-        color: var(--ui-color);
-        background: rgba(0, 0, 0, 0.6);
-        font-size: 0.8rem;
-        padding: 3px 8px;
+        border: 3px solid #00ffff;
+        border-radius: 0;
+        color: #00ffff;
+        background: #0f0f1e;
+        font-size: 0.5em;
+        padding: 8px 12px;
         cursor: pointer;
-        text-shadow: 0 0 4px var(--ui-color);
+        text-shadow: 
+          2px 2px 0 #000,
+          0 0 10px #00ffff;
         z-index: 120;
-        transition: all 0.3s ease;
+        transition: all 0.1s;
+        box-shadow: 
+          4px 4px 0 #000,
+          0 0 10px rgba(0,255,255,0.5);
       }
       #telegramToggle:hover {
-        background: var(--ui-color);
+        background: #00ffff;
         color: #000;
-        transform: scale(1.05);
+        transform: translate(2px, 2px);
+        box-shadow: 
+          2px 2px 0 #000,
+          0 0 20px rgba(0,255,255,0.8);
+      }
+      #telegramToggle:active {
+        transform: translate(4px, 4px);
+        box-shadow: 0 0 0 #000;
       }
       #telegramDrawer {
         position: fixed;
@@ -505,24 +614,52 @@
         bottom: -400px;
         width: 400px;
         height: 400px;
-        background: rgba(0, 0, 0, 0.9);
-        border: 1px solid var(--ui-color);
-        box-shadow: 0 0 12px var(--ui-color);
-        padding: 0.5rem;
+        background: #1a1a2e;
+        border: 4px solid #00ffff;
+        border-radius: 0;
+        box-shadow: 
+          4px 4px 0 #000,
+          0 0 20px #00ffff,
+          inset 0 0 20px rgba(0,255,255,0.1);
+        padding: 15px;
         transition: bottom 0.4s ease;
         z-index: 110;
         display: flex;
         flex-direction: column;
+        position: relative;
+      }
+      #telegramDrawer::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 2px,
+          rgba(0,255,255,0.1) 2px,
+          rgba(0,255,255,0.1) 4px
+        );
+        pointer-events: none;
+        opacity: 0.3;
       }
       #telegramDrawer.open {
         bottom: 40px;
       }
 
       #telegramDrawer h2 {
-        font-size: 0.9rem;
-        border-bottom: 1px solid var(--ui-color);
+        font-size: 0.7em;
+        border-bottom: 3px solid #00ffff;
         text-align: center;
-        margin-bottom: 5px;
+        margin-bottom: 10px;
+        padding-bottom: 10px;
+        text-shadow: 
+          2px 2px 0 #000,
+          0 0 10px #00ffff;
+        position: relative;
+        z-index: 1;
       }
 
 
@@ -757,6 +894,37 @@
     <div id="logDrawer">
       <h2>LOG TERMINAL</h2>
       <div id="logArea"></div>
+    </div>
+
+    <!-- OPENROUTER DRAWER -->
+    <div id="openRouterToggle">🤖 OPENROUTER</div>
+    <div id="openRouterDrawer">
+      <h2>🤖 НАСТРОЙКИ OPENROUTER</h2>
+      <div style="margin-bottom: 10px;">
+        <label style="display: block; margin-bottom: 5px; font-size: 0.7em;">Модель:</label>
+        <select id="openRouterModel" style="width: 100%; background: rgba(0, 0, 0, 0.8); border: 1px solid var(--ui-color); color: var(--ui-color); padding: 5px; font-family: inherit; font-size: 0.7em; margin-bottom: 5px;">
+          <option value="google/gemini-2.0-flash-001">Google Gemini 2.0 Flash</option>
+          <option value="openai/gpt-4o">OpenAI GPT-4o</option>
+          <option value="anthropic/claude-3.5-sonnet">Anthropic Claude 3.5 Sonnet</option>
+          <option value="google/gemini-1.5-pro">Google Gemini 1.5 Pro</option>
+          <option value="google/gemini-2.0-flash-exp">Google Gemini 2.0 Flash Experimental (бесплатно)</option>
+          <option value="qwen/qwen-2-vl-72b-instruct">Qwen2-VL 72B</option>
+          <option value="mistralai/pixtral-large">Mistral Pixtral Large</option>
+          <option value="x-ai/grok-4.1-fast:free">Grok 4.1 Fast (бесплатно)</option>
+        </select>
+      </div>
+      <div style="margin-bottom: 10px;">
+        <label style="display: block; margin-bottom: 5px; font-size: 0.7em;">Temperature (0.0-1.0):</label>
+        <input type="number" id="openRouterTemperature" min="0" max="1" step="0.1" value="0.0" style="width: 100%; background: rgba(0, 0, 0, 0.8); border: 1px solid var(--ui-color); color: var(--ui-color); padding: 5px; font-family: inherit; font-size: 0.7em; margin-bottom: 5px;" />
+      </div>
+      <div style="margin-bottom: 10px;">
+        <label style="display: block; margin-bottom: 5px; font-size: 0.7em;">Кастомный промпт (опционально):</label>
+        <textarea id="openRouterPrompt" rows="4" placeholder="Оставьте пустым для использования стандартного промпта..." style="width: 100%; background: rgba(0, 0, 0, 0.8); border: 1px solid var(--ui-color); color: var(--ui-color); padding: 5px; font-family: inherit; font-size: 0.7em; margin-bottom: 5px; resize: vertical;"></textarea>
+      </div>
+      <div id="openRouterStatus" style="font-size: 0.7em; color: var(--ui-color); opacity: 0.7; margin-bottom: 5px; text-align: center;"></div>
+      <button id="saveOpenRouterSettings" style="background: rgba(0, 0, 0, 0.8); border: 1px solid var(--ui-color); color: var(--ui-color); padding: 5px 10px; font-family: inherit; font-size: 0.7em; cursor: pointer; width: 100%;">
+        💾 Сохранить настройки
+      </button>
     </div>
 
     <!-- TELEGRAM DRAWER -->

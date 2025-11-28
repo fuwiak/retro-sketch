@@ -188,7 +188,7 @@ export async function renderPdfPreview(file, canvas) {
 /**
  * Upload PDF or image and process with OCR via backend API
  */
-export async function processPdfWithOCR(file, languages = ['rus', 'eng'], progressCallback = null) {
+export async function processPdfWithOCR(file, languages = ['rus', 'eng'], progressCallback = null, model = null, temperature = 0.0) {
   try {
     // Always use backend API endpoint
     if (progressCallback) {
@@ -198,6 +198,10 @@ export async function processPdfWithOCR(file, languages = ['rus', 'eng'], progre
     const formData = new FormData();
     formData.append('file', file);
     formData.append('languages', languages.join('+'));
+    if (model) {
+      formData.append('model', model);
+    }
+    formData.append('temperature', temperature.toString());
     
     if (progressCallback) {
       const fileSizeKB = (file.size / 1024).toFixed(1);
