@@ -2280,8 +2280,12 @@ async function loadFileFromCloud(url, fileName) {
     console.log('Detected type by signature:', { isPdfBySignature, isPngBySignature, isJpegBySignature, fileName });
     
     // Используем реальный тип файла, а не только расширение
+    // PDF имеет приоритет - если сигнатура PDF, это PDF независимо от расширения
     const actualIsPdf = isPdfBySignature;
-    const actualIsImage = isPngBySignature || isJpegBySignature;
+    // Изображение только если это не PDF и имеет сигнатуру изображения
+    const actualIsImage = !actualIsPdf && (isPngBySignature || isJpegBySignature);
+    
+    console.log('File type decision:', { actualIsPdf, actualIsImage, fileName, extension: fileName.split('.').pop() });
     
     // Если файл PDF по сигнатуре, но имеет расширение изображения - обрабатываем как PDF
     if (actualIsPdf) {
