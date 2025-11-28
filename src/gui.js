@@ -96,12 +96,14 @@ let userSettings = {
   humEnabled: true,
   soundsEnabled: true,
   color: "rgb(255, 0, 0)",
-  ocrLanguage: "rus+eng",
+  ocrLanguage: "rus", // По умолчанию русский
   autoTranslate: true,
   findSteelEquivalents: true,
   exportDocx: true,
   exportXlsx: true,
   exportPdf: true,
+  ocrMethod: "auto", // auto, openrouter_olmocr, openrouter_gotocr, paddleocr, tesseract
+  ocrQuality: "balanced", // fast, balanced, accurate
 };
 
 // ========== AUDIO ==========
@@ -1045,7 +1047,13 @@ els.processBtn.addEventListener("click", async () => {
         log(`⚠️ Failed to extract cropped image, falling back to full PDF`);
         addProgressSubStep('OCR Processing', `⚠️ Failed to extract, falling back to full PDF`);
         updateProgress('OCR Processing', 'active', `Fallback: Processing full PDF...`);
-        ocrResult = await pdfProcessor.processPdfWithOCR(currentPdfFile, languages);
+        ocrResult = await pdfProcessor.processPdfWithOCR(
+          currentPdfFile, 
+          languages,
+          null,
+          userSettings.ocrMethod || 'auto',
+          userSettings.ocrQuality || 'balanced'
+        );
       }
     } else {
       // Use full PDF
@@ -1073,7 +1081,13 @@ els.processBtn.addEventListener("click", async () => {
         log(`📝 ${msg}`);
       };
       
-      ocrResult = await pdfProcessor.processPdfWithOCR(currentPdfFile, languages, progressCallback);
+      ocrResult = await pdfProcessor.processPdfWithOCR(
+        currentPdfFile, 
+        languages, 
+        progressCallback,
+        userSettings.ocrMethod || 'auto',
+        userSettings.ocrQuality || 'balanced'
+      );
       addProgressSubStep('OCR Processing', `✅ OCR completed on full PDF`);
       addProgressSubStep('OCR Processing', `Model used: ${ocrResult.model || 'unknown'}`);
       addProgressSubStep('OCR Processing', `Confidence: ${(ocrResult.confidence * 100).toFixed(1)}%`);
@@ -2184,7 +2198,9 @@ saveSettings.addEventListener("click", () => {
   userSettings.color = els.colorPicker.value;
   userSettings.humEnabled = document.getElementById("humToggle")?.checked ?? true;
   userSettings.soundsEnabled = document.getElementById("soundsToggle")?.checked ?? true;
-  userSettings.ocrLanguage = document.getElementById("ocrLanguage")?.value || "rus+eng";
+  userSettings.ocrLanguage = document.getElementById("ocrLanguage")?.value || "rus";
+  userSettings.ocrMethod = document.getElementById("ocrMethod")?.value || "auto";
+  userSettings.ocrQuality = document.getElementById("ocrQuality")?.value || "balanced";
   userSettings.autoTranslate = document.getElementById("autoTranslate")?.checked ?? true;
   userSettings.findSteelEquivalents = document.getElementById("findSteelEquivalents")?.checked ?? true;
   userSettings.exportDocx = document.getElementById("exportDocx")?.checked ?? true;

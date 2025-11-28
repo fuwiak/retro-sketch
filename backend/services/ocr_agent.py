@@ -1,327 +1,289 @@
 """
-AI Agent for OCR Method Selection
-Evaluates processing time and selects optimal method (LLM vs Classical OCR)
+AI Agent для выбора оптимального метода OCR на основе типа PDF
+Определяет тип PDF (raster/vector) и выбирает метод от самого быстрого и точного
 """
 
 import os
+import base64
+import io
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, List
 from enum import Enum
+from services.logger import ocr_logger
+
+try:
+    import PyPDF2
+    PYPDF2_AVAILABLE = True
+except ImportError:
+    PYPDF2_AVAILABLE = False
 
 try:
     import pytesseract
     from PIL import Image
-    import pdf2image
     TESSERACT_AVAILABLE = True
 except ImportError:
     TESSERACT_AVAILABLE = False
 
-import httpx
+try:
+    from pdf2image import convert_from_bytes
+    PDF2IMAGE_AVAILABLE = True
+except ImportError:
+    PDF2IMAGE_AVAILABLE = False
 
-# Groq API configuration
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-GROQ_API_BASE = "https://api.groq.com/openai/v1"
-
-# Model for decision making
-DECISION_MODEL = "llama-3.1-8b-instant"  # Fast model for quick decisions
-
-# Thresholds (in seconds)
-TIME_THRESHOLD_FAST = 5.0  # If estimated < 5s, use LLM
-TIME_THRESHOLD_SLOW = 30.0  # If estimated > 30s, use Tesseract
-COMPLEXITY_THRESHOLD = 0.7  # Complexity score threshold
+try:
+    from paddleocr import PaddleOCR
+    PADDLEOCR_AVAILABLE = True
+except ImportError:
+    PADDLEOCR_AVAILABLE = False
 
 
-class ProcessingMethod(Enum):
-    """OCR Processing methods"""
-    LLM_GROQ = "llm_groq"  # Groq AI for complex/high-quality
-    TESSERACT = "tesseract"  # Classical OCR for speed
-    HYBRID = "hybrid"  # Combination of both
+class PDFType(Enum):
+    """Тип PDF документа"""
+    VECTOR = "vector"  # PDF с текстовым слоем
+    RASTER = "raster"  # Сканированный PDF (изображение)
+    MIXED = "mixed"    # Смешанный тип
+    UNKNOWN = "unknown"
 
 
-class OCREvaluationAgent:
-    """
-    AI Agent that evaluates PDF processing requirements
-    and selects optimal OCR method
-    """
+class OCRMethod(Enum):
+    """Методы OCR обработки"""
+    OPENROUTER_OLMOCR = "openrouter_olmocr"  # olmOCR через OpenRouter - лучший для raster PDF
+    OPENROUTER_GOTOCR = "openrouter_gotocr"  # GOT-OCR 2.0 через OpenRouter
+    OPENROUTER_MISTRAL = "openrouter_mistral"  # Mistral OCR через OpenRouter
+    OPENROUTER_AUTO = "openrouter_auto"  # Автоматический выбор модели OpenRouter
+    PADDLEOCR = "paddleocr"  # PaddleOCR - локальный, быстрый, точный (96.58%)
+    TESSERACT = "tesseract"  # Tesseract - классический OCR
+    PYPDF2 = "pypdf2"  # PyPDF2 - только для vector PDF
+    AUTO = "auto"  # Автоматический выбор на основе типа PDF
+
+
+class OCRQuality(Enum):
+    """Качество OCR"""
+    FAST = "fast"  # Быстрое (Tesseract, быстрые модели)
+    BALANCED = "balanced"  # Сбалансированное (PaddleOCR, средние модели)
+    ACCURATE = "accurate"  # Точное (OpenRouter специализированные модели)
+
+
+class OCRSelectionAgent:
+    """AI Agent для выбора оптимального метода OCR"""
     
-    def __init__(self):
-        self.api_key = GROQ_API_KEY
-        self.api_base = GROQ_API_BASE
+    def __init__(self, openrouter_service=None):
+        self.openrouter_service = openrouter_service
+        self.paddleocr_available = PADDLEOCR_AVAILABLE
         self.tesseract_available = TESSERACT_AVAILABLE
-    
-    def _estimate_file_size_factor(self, file_size: int) -> float:
-        """Estimate processing factor based on file size"""
-        # Normalize to MB
-        size_mb = file_size / (1024 * 1024)
+        self.pypdf2_available = PYPDF2_AVAILABLE
+        self.pdf2image_available = PDF2IMAGE_AVAILABLE
         
-        if size_mb < 1:
-            return 1.0  # Small files
-        elif size_mb < 5:
-            return 1.5  # Medium files
-        elif size_mb < 10:
-            return 2.5  # Large files
-        else:
-            return 4.0  # Very large files
+        # Инициализируем PaddleOCR если доступен
+        self.paddleocr_instance = None
+        if self.paddleocr_available:
+            try:
+                # Поддержка русского и английского
+                self.paddleocr_instance = PaddleOCR(use_angle_cls=True, lang='en+ru', use_gpu=False)
+                ocr_logger.info("✅ PaddleOCR инициализирован (rus+eng)")
+            except Exception as e:
+                ocr_logger.warning(f"⚠️ Не удалось инициализировать PaddleOCR: {e}")
+                self.paddleocr_available = False
     
-    def _estimate_page_count(self, file_content: bytes, file_type: str) -> int:
-        """Estimate number of pages"""
-        if file_type.startswith("image/"):
-            return 1
-        
-        # For PDFs, try to extract page count
-        try:
-            import PyPDF2
-            from io import BytesIO
-            pdf_reader = PyPDF2.PdfReader(BytesIO(file_content))
-            return len(pdf_reader.pages)
-        except:
-            # Estimate based on file size (rough approximation)
-            size_mb = len(file_content) / (1024 * 1024)
-            return max(1, int(size_mb * 2))  # Rough estimate: 2 pages per MB
-    
-    async def _estimate_complexity(self, file_content: bytes, file_type: str) -> Tuple[float, str]:
+    async def detect_pdf_type(self, file_content: bytes) -> PDFType:
         """
-        Estimate document complexity using AI
-        Returns: (complexity_score, reasoning)
+        Определяет тип PDF (vector/raster/mixed)
         """
-        if not self.api_key:
-            # Default complexity if no API key
-            return 0.5, "No API key - using default complexity"
-        
-        # Quick analysis of file characteristics
-        size_mb = len(file_content) / (1024 * 1024)
-        pages = self._estimate_page_count(file_content, file_type)
-        
-        # Simple heuristic-based complexity
-        complexity = 0.5  # Base complexity
-        
-        # Adjust based on file size
-        if size_mb > 10:
-            complexity += 0.2  # Large files are more complex
-        elif size_mb < 1:
-            complexity -= 0.1  # Small files are simpler
-        
-        # Adjust based on page count
-        if pages > 20:
-            complexity += 0.2
-        elif pages > 10:
-            complexity += 0.1
-        
-        # Use AI for more sophisticated analysis if needed
         try:
-            # Quick AI evaluation (only if file is not too large)
-            if size_mb < 5:
-                complexity, reasoning = await self._ai_complexity_analysis(file_content, file_type)
-                return complexity, reasoning
-        except:
-            pass
-        
-        return complexity, f"Heuristic: size={size_mb:.1f}MB, pages={pages}"
-    
-    async def _ai_complexity_analysis(
-        self,
-        file_content: bytes,
-        file_type: str
-    ) -> Tuple[float, str]:
-        """Use AI to analyze document complexity"""
-        try:
-            import base64
-            file_b64 = base64.b64encode(file_content[:50000]).decode("utf-8")  # First 50KB
+            # Проверяем, что это PDF
+            if not file_content[:4] == b'%PDF':
+                return PDFType.UNKNOWN
             
-            prompt = f"""Analyze this document sample and estimate processing complexity (0.0-1.0):
-- 0.0-0.3: Simple text documents, clear fonts, few pages
-- 0.3-0.6: Standard documents, some formatting, moderate pages
-- 0.7-1.0: Complex documents, mixed languages, dense text, technical drawings
-
-Document type: {file_type}
-Sample (base64): {file_b64[:1000]}...
-
-Return ONLY a JSON object: {{"complexity": 0.5, "reasoning": "brief explanation"}}"""
-            
-            messages = [
-                {
-                    "role": "system",
-                    "content": "You are a document analysis expert. Analyze document complexity for OCR processing."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
-            
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    f"{self.api_base}/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": DECISION_MODEL,
-                        "messages": messages,
-                        "temperature": 0.1,
-                        "max_tokens": 200,
-                    }
-                )
-                
-                if response.is_success:
-                    data = response.json()
-                    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            # Метод 1: Пробуем извлечь текст через PyPDF2
+            if self.pypdf2_available:
+                try:
+                    pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
+                    total_text_length = 0
+                    pages_with_text = 0
                     
-                    # Try to parse JSON from response
-                    import json
-                    import re
-                    json_match = re.search(r'\{[^}]+\}', content)
-                    if json_match:
-                        result = json.loads(json_match.group())
-                        return result.get("complexity", 0.5), result.get("reasoning", "AI analysis")
-        
+                    for page in pdf_reader.pages:
+                        try:
+                            page_text = page.extract_text()
+                            if page_text and len(page_text.strip()) > 50:  # Минимум 50 символов
+                                total_text_length += len(page_text)
+                                pages_with_text += 1
+                        except:
+                            pass
+                    
+                    total_pages = len(pdf_reader.pages)
+                    
+                    if total_pages == 0:
+                        return PDFType.UNKNOWN
+                    
+                    # Если больше 80% страниц содержат текст - это vector PDF
+                    text_ratio = pages_with_text / total_pages
+                    avg_text_per_page = total_text_length / total_pages if total_pages > 0 else 0
+                    
+                    if text_ratio > 0.8 and avg_text_per_page > 100:
+                        ocr_logger.info(f"📄 PDF тип: VECTOR (текст найден на {pages_with_text}/{total_pages} страницах)")
+                        return PDFType.VECTOR
+                    elif text_ratio > 0.3:
+                        ocr_logger.info(f"📄 PDF тип: MIXED (текст найден на {pages_with_text}/{total_pages} страницах)")
+                        return PDFType.MIXED
+                    else:
+                        ocr_logger.info(f"📄 PDF тип: RASTER (текст найден на {pages_with_text}/{total_pages} страницах)")
+                        return PDFType.RASTER
+                except Exception as e:
+                    ocr_logger.warning(f"⚠️ Ошибка при определении типа PDF через PyPDF2: {e}")
+            
+            # Метод 2: Анализ первой страницы как изображения
+            if self.pdf2image_available:
+                try:
+                    images = convert_from_bytes(file_content, dpi=150, first_page=1, last_page=1)
+                    if images:
+                        # Если удалось конвертировать в изображение - вероятно raster
+                        # Но это не точный метод, используем как fallback
+                        ocr_logger.info("📄 PDF тип: RASTER (определено через конвертацию в изображение)")
+                        return PDFType.RASTER
+                except Exception as e:
+                    ocr_logger.warning(f"⚠️ Ошибка при конвертации PDF: {e}")
+            
+            # По умолчанию считаем raster (более частый случай для сканированных документов)
+            ocr_logger.info("📄 PDF тип: RASTER (по умолчанию)")
+            return PDFType.RASTER
+            
         except Exception as e:
-            pass
-        
-        return 0.5, "AI analysis unavailable"
+            ocr_logger.error(f"❌ Ошибка при определении типа PDF: {e}")
+            return PDFType.UNKNOWN
     
-    async def evaluate_processing_requirements(
+    def select_ocr_method(
+        self,
+        pdf_type: PDFType,
+        user_method: str = "auto",
+        quality: str = "balanced"
+    ) -> OCRMethod:
+        """
+        Выбирает оптимальный метод OCR на основе типа PDF и настроек пользователя
+        """
+        # Если пользователь указал конкретный метод
+        if user_method != "auto":
+            try:
+                return OCRMethod(user_method)
+            except ValueError:
+                ocr_logger.warning(f"⚠️ Неизвестный метод {user_method}, используем auto")
+        
+        # Автоматический выбор на основе типа PDF
+        if pdf_type == PDFType.VECTOR:
+            # Для vector PDF используем PyPDF2 (самый быстрый)
+            if self.pypdf2_available:
+                ocr_logger.info("🎯 Выбран метод: PYPDF2 (vector PDF)")
+                return OCRMethod.PYPDF2
+            else:
+                # Fallback на OpenRouter
+                ocr_logger.info("🎯 Выбран метод: OPENROUTER_AUTO (vector PDF, PyPDF2 недоступен)")
+                return OCRMethod.OPENROUTER_AUTO
+        
+        elif pdf_type == PDFType.RASTER:
+            # Для raster PDF выбираем на основе качества
+            if quality == "accurate":
+                # Самый точный - специализированные модели OpenRouter
+                if self.openrouter_service and self.openrouter_service.is_available():
+                    ocr_logger.info("🎯 Выбран метод: OPENROUTER_OLMOCR (raster PDF, accurate)")
+                    return OCRMethod.OPENROUTER_OLMOCR
+                elif self.paddleocr_available:
+                    ocr_logger.info("🎯 Выбран метод: PADDLEOCR (raster PDF, accurate, OpenRouter недоступен)")
+                    return OCRMethod.PADDLEOCR
+                else:
+                    ocr_logger.info("🎯 Выбран метод: TESSERACT (raster PDF, accurate, fallback)")
+                    return OCRMethod.TESSERACT
+            
+            elif quality == "fast":
+                # Самый быстрый - локальные методы
+                if self.paddleocr_available:
+                    ocr_logger.info("🎯 Выбран метод: PADDLEOCR (raster PDF, fast)")
+                    return OCRMethod.PADDLEOCR
+                elif self.tesseract_available:
+                    ocr_logger.info("🎯 Выбран метод: TESSERACT (raster PDF, fast)")
+                    return OCRMethod.TESSERACT
+                else:
+                    ocr_logger.info("🎯 Выбран метод: OPENROUTER_AUTO (raster PDF, fast, fallback)")
+                    return OCRMethod.OPENROUTER_AUTO
+            
+            else:  # balanced
+                # Сбалансированный - пробуем OpenRouter, затем локальные
+                if self.openrouter_service and self.openrouter_service.is_available():
+                    ocr_logger.info("🎯 Выбран метод: OPENROUTER_AUTO (raster PDF, balanced)")
+                    return OCRMethod.OPENROUTER_AUTO
+                elif self.paddleocr_available:
+                    ocr_logger.info("🎯 Выбран метод: PADDLEOCR (raster PDF, balanced, OpenRouter недоступен)")
+                    return OCRMethod.PADDLEOCR
+                else:
+                    ocr_logger.info("🎯 Выбран метод: TESSERACT (raster PDF, balanced, fallback)")
+                    return OCRMethod.TESSERACT
+        
+        else:  # MIXED или UNKNOWN
+            # Для mixed/unknown используем универсальный подход
+            if self.openrouter_service and self.openrouter_service.is_available():
+                ocr_logger.info("🎯 Выбран метод: OPENROUTER_AUTO (mixed/unknown PDF)")
+                return OCRMethod.OPENROUTER_AUTO
+            elif self.paddleocr_available:
+                ocr_logger.info("🎯 Выбран метод: PADDLEOCR (mixed/unknown PDF, OpenRouter недоступен)")
+                return OCRMethod.PADDLEOCR
+            else:
+                ocr_logger.info("🎯 Выбран метод: TESSERACT (mixed/unknown PDF, fallback)")
+                return OCRMethod.TESSERACT
+    
+    async def process_with_paddleocr(
         self,
         file_content: bytes,
         file_type: str,
         languages: List[str]
-    ) -> Dict:
+    ) -> Optional[str]:
         """
-        Evaluate PDF processing requirements and estimate time
-        Returns: {
-            "estimated_time": float,
-            "complexity": float,
-            "recommended_method": ProcessingMethod,
-            "reasoning": str,
-            "file_stats": dict
-        }
+        Обработка с помощью PaddleOCR
         """
-        file_size = len(file_content)
-        pages = self._estimate_page_count(file_content, file_type)
-        complexity, complexity_reasoning = await self._estimate_complexity(file_content, file_type)
+        if not self.paddleocr_available or not self.paddleocr_instance:
+            raise ValueError("PaddleOCR не доступен")
         
-        # Estimate processing time for each method
-        llm_time = self._estimate_llm_time(file_size, pages, complexity)
-        tesseract_time = self._estimate_tesseract_time(file_size, pages)
-        
-        # Determine recommended method
-        recommended_method, reasoning = self._select_method(
-            llm_time=llm_time,
-            tesseract_time=tesseract_time,
-            complexity=complexity,
-            file_size=file_size,
-            pages=pages,
-            languages=languages
-        )
-        
-        # Use the time of recommended method
-        estimated_time = llm_time if recommended_method == ProcessingMethod.LLM_GROQ else tesseract_time
-        
-        return {
-            "estimated_time": estimated_time,
-            "complexity": complexity,
-            "recommended_method": recommended_method,
-            "reasoning": reasoning,
-            "file_stats": {
-                "size_mb": file_size / (1024 * 1024),
-                "pages": pages,
-                "complexity_reasoning": complexity_reasoning
-            },
-            "method_estimates": {
-                "llm_groq": llm_time,
-                "tesseract": tesseract_time
-            }
-        }
-    
-    def _estimate_llm_time(self, file_size: int, pages: int, complexity: float) -> float:
-        """Estimate processing time for LLM method"""
-        size_mb = file_size / (1024 * 1024)
-        
-        # Base time per page for LLM
-        base_time_per_page = 2.0  # seconds
-        complexity_factor = 1.0 + (complexity * 0.5)  # 1.0-1.5x
-        size_factor = 1.0 + (size_mb * 0.1)  # Larger files take longer
-        
-        estimated = (base_time_per_page * pages * complexity_factor * size_factor)
-        return min(estimated, 120.0)  # Cap at 2 minutes
-    
-    def _estimate_tesseract_time(self, file_size: int, pages: int) -> float:
-        """Estimate processing time for Tesseract method"""
-        size_mb = file_size / (1024 * 1024)
-        
-        # Base time per page for Tesseract (faster but less accurate)
-        base_time_per_page = 0.5  # seconds
-        size_factor = 1.0 + (size_mb * 0.05)
-        
-        estimated = base_time_per_page * pages * size_factor
-        return min(estimated, 60.0)  # Cap at 1 minute
-    
-    def _select_method(
-        self,
-        llm_time: float,
-        tesseract_time: float,
-        complexity: float,
-        file_size: int,
-        pages: int,
-        languages: List[str]
-    ) -> Tuple[ProcessingMethod, str]:
-        """Select optimal OCR method based on evaluation"""
-        
-        # Check if Tesseract is available
-        if not self.tesseract_available:
-            return ProcessingMethod.LLM_GROQ, "Tesseract not available, using LLM"
-        
-        # Rule 1: Very large files -> Tesseract (faster)
-        if file_size > 10 * 1024 * 1024:  # > 10MB
-            return ProcessingMethod.TESSERACT, "Large file (>10MB) - Tesseract is faster"
-        
-        # Rule 2: Many pages -> Tesseract (faster batch processing)
-        if pages > 20:
-            return ProcessingMethod.TESSERACT, f"Many pages ({pages}) - Tesseract is faster"
-        
-        # Rule 3: High complexity -> LLM (better quality)
-        if complexity > COMPLEXITY_THRESHOLD:
-            return ProcessingMethod.LLM_GROQ, f"High complexity ({complexity:.2f}) - LLM provides better quality"
-        
-        # Rule 4: Time-based decision
-        if tesseract_time < TIME_THRESHOLD_FAST and llm_time > TIME_THRESHOLD_SLOW:
-            return ProcessingMethod.TESSERACT, f"Tesseract much faster ({tesseract_time:.1f}s vs {llm_time:.1f}s)"
-        
-        if llm_time < TIME_THRESHOLD_FAST:
-            return ProcessingMethod.LLM_GROQ, f"Both methods fast, LLM preferred for quality ({llm_time:.1f}s)"
-        
-        # Rule 5: Multiple languages -> LLM (better multilingual support)
-        if len(languages) > 2:
-            return ProcessingMethod.LLM_GROQ, f"Multiple languages ({len(languages)}) - LLM handles better"
-        
-        # Rule 6: Default to faster method
-        if tesseract_time < llm_time * 0.7:  # Tesseract is significantly faster
-            return ProcessingMethod.TESSERACT, f"Tesseract faster ({tesseract_time:.1f}s vs {llm_time:.1f}s)"
-        else:
-            return ProcessingMethod.LLM_GROQ, f"LLM preferred for quality ({llm_time:.1f}s vs {tesseract_time:.1f}s)"
-    
-    def get_method_info(self, method: ProcessingMethod) -> Dict:
-        """Get information about processing method"""
-        info = {
-            ProcessingMethod.LLM_GROQ: {
-                "name": "Groq AI (LLM)",
-                "speed": "Medium",
-                "accuracy": "High",
-                "best_for": "Complex documents, multiple languages, high quality"
-            },
-            ProcessingMethod.TESSERACT: {
-                "name": "Tesseract OCR",
-                "speed": "Fast",
-                "accuracy": "Medium",
-                "best_for": "Large files, many pages, simple documents"
-            },
-            ProcessingMethod.HYBRID: {
-                "name": "Hybrid (LLM + Tesseract)",
-                "speed": "Medium",
-                "accuracy": "High",
-                "best_for": "Balanced approach"
-            }
-        }
-        return info.get(method, {})
-
+        try:
+            is_image = file_type.startswith("image/")
+            
+            if is_image:
+                # Обработка изображения
+                image = Image.open(io.BytesIO(file_content))
+                # Конвертируем в numpy array для PaddleOCR
+                import numpy as np
+                img_array = np.array(image)
+                
+                result = self.paddleocr_instance.ocr(img_array, cls=True)
+                
+                # Извлекаем текст из результата
+                text_parts = []
+                if result and result[0]:
+                    for line in result[0]:
+                        if line and len(line) > 1:
+                            text_parts.append(line[1][0])  # Текст из кортежа
+                
+                return "\n".join(text_parts) if text_parts else None
+            else:
+                # Обработка PDF
+                if not self.pdf2image_available:
+                    raise ValueError("pdf2image не доступен для обработки PDF")
+                
+                images = convert_from_bytes(file_content, dpi=300, fmt='png')
+                all_text = []
+                
+                import numpy as np
+                for page_num, img in enumerate(images, 1):
+                    img_array = np.array(img)
+                    result = self.paddleocr_instance.ocr(img_array, cls=True)
+                    
+                    text_parts = []
+                    if result and result[0]:
+                        for line in result[0]:
+                            if line and len(line) > 1:
+                                text_parts.append(line[1][0])
+                    
+                    if text_parts:
+                        all_text.append(f"--- Страница {page_num} ---\n" + "\n".join(text_parts))
+                
+                return "\n\n".join(all_text) if all_text else None
+                
+        except Exception as e:
+            ocr_logger.error(f"❌ Ошибка PaddleOCR: {e}")
+            return None

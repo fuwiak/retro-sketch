@@ -15,4 +15,6 @@ numpy==1.26.3
 opencv-python-headless==4.9.0.80
 beautifulsoup4==4.12.2
 requests==2.31.0
+paddlepaddle==2.6.0
+paddleocr==2.7.3
 

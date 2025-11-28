@@ -58,14 +58,18 @@ OPENROUTER_API_URL = os.getenv("OPENROUTER_API_URL", "https://openrouter.ai/api/
 # Порядок попыток подключения к API для анализа чертежей и извлечения текста
 # ПРИОРИТЕТ: специализированные OCR модели для максимально надежного извлечения текста
 DETECTION_FALLBACKS = [
-    # ===== СПЕЦИАЛИЗИРОВАННЫЕ OCR МОДЕЛИ (ВЫСШИЙ ПРИОРИТЕТ) =====
+    # ===== СПЕЦИАЛИЗИРОВАННЫЕ OCR МОДЕЛИ ДЛЯ RASTER PDF (ВЫСШИЙ ПРИОРИТЕТ) =====
+    {"provider": "openrouter", "model": "allenai/olmocr"},  # olmOCR - специализируется на raster PDF, $190/млн страниц, alignment 0.875
+    {"provider": "openrouter", "model": "got-ocr/got-ocr-2.0"},  # GOT-OCR 2.0 - единая архитектура для текста, графиков, формул, таблиц, ultra-high res
+    {"provider": "openrouter", "model": "mistralai/mistral-ocr"},  # Mistral OCR - для сложных документов, PDF, таблицы, уравнения
+    
+    # ===== УНИВЕРСАЛЬНЫЕ OCR МОДЕЛИ (ВЫСОКИЙ ПРИОРИТЕТ) =====
     {"provider": "openrouter", "model": "qwen/qwen3-vl-32b-instruct"},  # Qwen3-VL-32B - распознавание текста в 32 языках (rus/eng), контекст 256K
     {"provider": "openrouter", "model": "qwen/qwen2.5-vl-72b-instruct"},  # Qwen2.5-VL-72B - высокая производительность OCR, DocVQA
     {"provider": "openrouter", "model": "qwen/qwen2.5-vl-32b-instruct"},  # Qwen2.5-VL-32B - оптимизирован для визуальных задач, интерпретация текста
     {"provider": "openrouter", "model": "internvl/internvl2-78b"},  # InternVL 2.5 78B - отличные результаты в анализе структур документов
     {"provider": "openrouter", "model": "internvl/internvl2-26b"},  # InternVL 2.5 26B - высокий баланс скорости и качества
     {"provider": "openrouter", "model": "internvl/internvl2-8b"},  # InternVL 2.5 8B - быстрая версия для OCR
-    {"provider": "openrouter", "model": "got-ocr/got-ocr-2.0"},  # GOT-OCR 2.0 - единая архитектура для текста, графиков, формул, таблиц
     
     # ===== УНИВЕРСАЛЬНЫЕ МОДЕЛИ (ВЫСОКОЕ КАЧЕСТВО) =====
     {"provider": "openrouter", "model": "openai/gpt-4o"},  # GPT-4o - лучшая для технических чертежей
@@ -90,8 +94,8 @@ TEXT_MODELS = [
 ]
 
 # Настройки моделей по умолчанию
-# Используем специализированную OCR модель по умолчанию для максимальной надежности
-DEFAULT_VISION_MODEL = "qwen/qwen3-vl-32b-instruct"  # Qwen3-VL - лучшая для извлечения текста (rus/eng)
+# Используем специализированную OCR модель для raster PDF по умолчанию
+DEFAULT_VISION_MODEL = "allenai/olmocr"  # olmOCR - лучшая для raster PDF (сканированных документов)
 DEFAULT_TEXT_MODEL = "anthropic/claude-3.5-sonnet"  # Для перевода
 
 # Legacy compatibility

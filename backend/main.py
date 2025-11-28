@@ -85,7 +85,9 @@ async def health():
 async def process_ocr(
     request: Request,
     file: UploadFile = File(...),
-    languages: str = Form("rus+eng")
+    languages: str = Form("rus"),
+    ocr_method: str = Form("auto"),
+    ocr_quality: str = Form("balanced")
 ):
     """
     Process PDF or image file with OCR using OpenRouter first, then OCR fallbacks.
@@ -114,7 +116,9 @@ async def process_ocr(
         result = await ocr_service.process_file(
             file_content=file_content,
             file_type=file_type,
-            languages=lang_list
+            languages=lang_list,
+            ocr_method=ocr_method,
+            ocr_quality=ocr_quality
         )
         
         # Extract processing info

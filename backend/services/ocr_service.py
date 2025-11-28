@@ -10,19 +10,26 @@ import io
 import time
 
 try:
+    import PyPDF2
+    PYPDF2_AVAILABLE = True
+except ImportError:
+    PYPDF2_AVAILABLE = False
+
+try:
     import pytesseract
     from PIL import Image
-    try:
-        from pdf2image import convert_from_bytes
-        PDF2IMAGE_AVAILABLE = True
-    except ImportError:
-        PDF2IMAGE_AVAILABLE = False
     TESSERACT_AVAILABLE = True
 except ImportError:
     TESSERACT_AVAILABLE = False
+
+try:
+    from pdf2image import convert_from_bytes
+    PDF2IMAGE_AVAILABLE = True
+except ImportError:
     PDF2IMAGE_AVAILABLE = False
 
 from services.logger import ocr_logger, log_ocr_request, log_ocr_result
+from services.ocr_agent import OCRSelectionAgent, PDFType, OCRMethod, OCRQuality
 
 # OpenRouter будет использоваться через OpenRouterService
 # Groq полностью отключен
@@ -35,6 +42,7 @@ class OCRService:
         self.openrouter_service = openrouter_service  # Будет передан из main.py
         self.tesseract_available = TESSERACT_AVAILABLE
         self.pdf2image_available = PDF2IMAGE_AVAILABLE
+        self.agent = OCRSelectionAgent(openrouter_service=openrouter_service)  # AI агент для выбора метода
     
     def is_available(self) -> bool:
         """Check if OCR service is available"""
@@ -103,7 +111,9 @@ class OCRService:
         self,
         file_content: bytes,
         file_type: str,
-        languages: List[str] = ["rus", "eng"]
+        languages: List[str] = ["rus"],
+        ocr_method: str = "auto",
+        ocr_quality: str = "balanced"
     ) -> Dict:
         """
         Process file with OCR using OpenRouter first, then OCR fallbacks
@@ -131,77 +141,146 @@ class OCRService:
         
         # Определяем количество страниц
         pages = 1
+        pdf_type = None
         if not is_image:
             try:
                 import PyPDF2
                 pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
                 pages = len(pdf_reader.pages)
+                
+                # Определяем тип PDF через AI агента
+                ocr_logger.info("🔍 Определяем тип PDF...")
+                pdf_type = await self.agent.detect_pdf_type(file_content)
+                ocr_logger.info(f"📄 Тип PDF: {pdf_type.value}")
             except:
                 pass
         
+        # Выбираем метод OCR через AI агента
+        selected_method = self.agent.select_ocr_method(
+            pdf_type=pdf_type if pdf_type else PDFType.RASTER,
+            user_method=ocr_method,
+            quality=ocr_quality
+        )
+        ocr_logger.info(f"🎯 Выбранный метод OCR: {selected_method.value}")
+        
         processing_info = {
-            "method": "openrouter",
+            "method": selected_method.value,
+            "pdf_type": pdf_type.value if pdf_type else "image",
             "fallback_used": False
         }
         
         ocr_text = None
         
-        # ШАГ 1: Пробуем OpenRouter (если доступен)
-        if self.openrouter_service and self.openrouter_service.is_available():
-            try:
-                ocr_logger.info("🎯 Шаг 1: Пробуем извлечь текст через OpenRouter...")
-                openrouter_start = time.time()
-                
-                # Для PDF конвертируем первую страницу в изображение для OpenRouter
-                # Для изображений используем напрямую
-                if is_image:
-                    file_b64 = base64.b64encode(file_content).decode("utf-8")
-                else:
-                    # Для PDF конвертируем в изображение
-                    if PDF2IMAGE_AVAILABLE:
+        # Обрабатываем в зависимости от выбранного метода
+        if selected_method == OCRMethod.PYPDF2:
+            # Для vector PDF используем PyPDF2
+            if not is_image and PYPDF2_AVAILABLE:
+                try:
+                    import PyPDF2
+                    ocr_logger.info("📄 Используем PyPDF2 для vector PDF...")
+                    pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
+                    text_parts = []
+                    for page_num, page in enumerate(pdf_reader.pages, 1):
                         try:
-                            from pdf2image import convert_from_bytes
-                            # Конвертируем первую страницу в изображение
-                            images = convert_from_bytes(file_content, dpi=300, first_page=1, last_page=1)
-                            if images:
-                                # Конвертируем изображение в base64
-                                img_buffer = io.BytesIO()
-                                images[0].save(img_buffer, format='PNG')
-                                img_buffer.seek(0)
-                                file_b64 = base64.b64encode(img_buffer.getvalue()).decode("utf-8")
-                                ocr_logger.info("   PDF конвертирован в изображение для OpenRouter")
-                            else:
-                                raise Exception("Не удалось конвертировать PDF в изображение")
-                        except Exception as e:
-                            ocr_logger.warning(f"   Не удалось конвертировать PDF: {e}, пропускаем OpenRouter")
-                            file_b64 = None
-                    else:
-                        ocr_logger.warning("   pdf2image недоступен, пропускаем OpenRouter для PDF")
-                        file_b64 = None
-                
-                if file_b64:
-                    # Пробуем извлечь текст через OpenRouter
-                    ocr_text = await self.openrouter_service.extract_text_from_image(
-                        image_base64=file_b64,
-                        languages=languages,
-                        model=None  # Использует приоритетные модели
-                    )
-                    
-                    openrouter_time = time.time() - openrouter_start
-                    
-                    if ocr_text and len(ocr_text.strip()) > 0:
-                        processing_info["method"] = "openrouter"
-                        processing_info["openrouter_time"] = openrouter_time
-                        ocr_logger.info(f"✅ OpenRouter успешно извлек текст: {len(ocr_text)} символов за {openrouter_time:.2f}s")
-                    else:
-                        ocr_logger.warning("⚠️ OpenRouter вернул пустой результат, пробуем OCR fallback'и...")
-                        ocr_text = None
-                else:
-                    ocr_text = None
-                    
+                            page_text = page.extract_text()
+                            if page_text.strip():
+                                text_parts.append(f"--- Страница {page_num} ---\n{page_text}")
+                        except:
+                            pass
+                    if text_parts:
+                        ocr_text = "\n\n".join(text_parts)
+                        ocr_logger.info(f"✅ PyPDF2 извлек текст: {len(ocr_text)} символов")
+                except Exception as e:
+                    ocr_logger.error(f"❌ PyPDF2 не сработал: {e}")
+        
+        elif selected_method == OCRMethod.PADDLEOCR:
+            # Используем PaddleOCR
+            try:
+                ocr_logger.info("🚀 Используем PaddleOCR...")
+                ocr_text = await self.agent.process_with_paddleocr(file_content, file_type, languages)
+                if ocr_text:
+                    ocr_logger.info(f"✅ PaddleOCR извлек текст: {len(ocr_text)} символов")
             except Exception as e:
-                ocr_logger.warning(f"⚠️ OpenRouter не сработал: {e}, пробуем OCR fallback'и...")
-                ocr_text = None
+                ocr_logger.error(f"❌ PaddleOCR не сработал: {e}")
+        
+        elif selected_method == OCRMethod.TESSERACT:
+            # Используем Tesseract
+            try:
+                ocr_logger.info("🔧 Используем Tesseract OCR...")
+                ocr_text = await self._process_with_tesseract(file_content, file_type, languages)
+                if ocr_text:
+                    ocr_logger.info(f"✅ Tesseract извлек текст: {len(ocr_text)} символов")
+            except Exception as e:
+                ocr_logger.error(f"❌ Tesseract не сработал: {e}")
+        
+        # Для OpenRouter методов
+        if not ocr_text and selected_method in [OCRMethod.OPENROUTER_OLMOCR, OCRMethod.OPENROUTER_GOTOCR, OCRMethod.OPENROUTER_MISTRAL, OCRMethod.OPENROUTER_AUTO]:
+            # ШАГ 1: Пробуем OpenRouter (если доступен)
+            if self.openrouter_service and self.openrouter_service.is_available():
+                try:
+                    ocr_logger.info("🎯 Шаг 1: Пробуем извлечь текст через OpenRouter...")
+                    openrouter_start = time.time()
+                    
+                    # Для PDF конвертируем первую страницу в изображение для OpenRouter
+                    # Для изображений используем напрямую
+                    if is_image:
+                        file_b64 = base64.b64encode(file_content).decode("utf-8")
+                    else:
+                        # Для PDF конвертируем в изображение
+                        if PDF2IMAGE_AVAILABLE:
+                            try:
+                                from pdf2image import convert_from_bytes
+                                # Конвертируем первую страницу в изображение
+                                images = convert_from_bytes(file_content, dpi=300, first_page=1, last_page=1)
+                                if images:
+                                    # Конвертируем изображение в base64
+                                    img_buffer = io.BytesIO()
+                                    images[0].save(img_buffer, format='PNG')
+                                    img_buffer.seek(0)
+                                    file_b64 = base64.b64encode(img_buffer.getvalue()).decode("utf-8")
+                                    ocr_logger.info("   PDF конвертирован в изображение для OpenRouter")
+                                else:
+                                    raise Exception("Не удалось конвертировать PDF в изображение")
+                            except Exception as e:
+                                ocr_logger.warning(f"   Не удалось конвертировать PDF: {e}, пропускаем OpenRouter")
+                                file_b64 = None
+                        else:
+                            ocr_logger.warning("   pdf2image недоступен, пропускаем OpenRouter для PDF")
+                            file_b64 = None
+                
+                    if file_b64:
+                        # Выбираем конкретную модель в зависимости от метода
+                        model_to_use = None
+                        if selected_method == OCRMethod.OPENROUTER_OLMOCR:
+                            model_to_use = "allenai/olmocr"
+                        elif selected_method == OCRMethod.OPENROUTER_GOTOCR:
+                            model_to_use = "got-ocr/got-ocr-2.0"
+                        elif selected_method == OCRMethod.OPENROUTER_MISTRAL:
+                            model_to_use = "mistralai/mistral-ocr"
+                        # Для OPENROUTER_AUTO используем None (автоматический выбор)
+                        
+                        # Пробуем извлечь текст через OpenRouter
+                        ocr_text = await self.openrouter_service.extract_text_from_image(
+                            image_base64=file_b64,
+                            languages=languages,
+                            model=model_to_use
+                        )
+                    
+                        openrouter_time = time.time() - openrouter_start
+                        
+                        if ocr_text and len(ocr_text.strip()) > 0:
+                            processing_info["method"] = "openrouter"
+                            processing_info["openrouter_time"] = openrouter_time
+                            ocr_logger.info(f"✅ OpenRouter успешно извлек текст: {len(ocr_text)} символов за {openrouter_time:.2f}s")
+                        else:
+                            ocr_logger.warning("⚠️ OpenRouter вернул пустой результат, пробуем OCR fallback'и...")
+                            ocr_text = None
+                    else:
+                        ocr_text = None
+                        
+                except Exception as e:
+                    ocr_logger.warning(f"⚠️ OpenRouter не сработал: {e}, пробуем OCR fallback'и...")
+                    ocr_text = None
         
         # ШАГ 2: Если OpenRouter не сработал, используем OCR fallback'и
         if not ocr_text or len(ocr_text.strip()) == 0:

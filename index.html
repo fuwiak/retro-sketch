@@ -167,6 +167,7 @@
       #controls input,
       #controls select,
       #controls button {
+        border-radius: 12px; /* macOS Dock стиль */
         background: rgba(0, 0, 0, 0.8);
         border: 1px solid var(--ui-color);
         color: var(--ui-color);
@@ -701,6 +702,7 @@
         font-family: inherit;
         cursor: pointer;
         flex: 1;
+        border-radius: 12px; /* macOS Dock стиль */
       }
       #settingsContent button:hover {
         background: var(--ui-color);
@@ -867,10 +869,31 @@
         <h2>⚙️ SETTINGS</h2>
         <div style="margin: 10px 0;">
           <label style="display: block; margin-bottom: 5px;">OCR Language:</label>
-          <select id="ocrLanguage" style="width: 100%; background: rgba(0,0,0,0.7); border: 1px solid var(--ui-color); color: var(--ui-color); font-family: inherit; padding: 4px;">
-            <option value="rus+eng">Russian + English</option>
-            <option value="rus">Russian only</option>
+          <select id="ocrLanguage" style="width: 100%; background: rgba(0,0,0,0.7); border: 1px solid var(--ui-color); color: var(--ui-color); font-family: inherit; padding: 4px; border-radius: 10px;">
+            <option value="rus">Русский (по умолчанию)</option>
+            <option value="rus+eng">Русский + English</option>
             <option value="eng">English only</option>
+          </select>
+        </div>
+        <div style="margin: 10px 0;">
+          <label style="display: block; margin-bottom: 5px;">OCR Method:</label>
+          <select id="ocrMethod" style="width: 100%; background: rgba(0,0,0,0.7); border: 1px solid var(--ui-color); color: var(--ui-color); font-family: inherit; padding: 4px; border-radius: 10px;">
+            <option value="auto">Автоматический выбор (AI агент)</option>
+            <option value="openrouter_olmocr">OpenRouter: olmOCR (лучший для raster PDF)</option>
+            <option value="openrouter_gotocr">OpenRouter: GOT-OCR 2.0</option>
+            <option value="openrouter_mistral">OpenRouter: Mistral OCR</option>
+            <option value="openrouter_auto">OpenRouter: Автоматический выбор модели</option>
+            <option value="paddleocr">PaddleOCR (локальный, быстрый)</option>
+            <option value="tesseract">Tesseract (классический OCR)</option>
+            <option value="pypdf2">PyPDF2 (только для vector PDF)</option>
+          </select>
+        </div>
+        <div style="margin: 10px 0;">
+          <label style="display: block; margin-bottom: 5px;">OCR Quality:</label>
+          <select id="ocrQuality" style="width: 100%; background: rgba(0,0,0,0.7); border: 1px solid var(--ui-color); color: var(--ui-color); font-family: inherit; padding: 4px; border-radius: 10px;">
+            <option value="fast">Быстрое</option>
+            <option value="balanced" selected>Сбалансированное (по умолчанию)</option>
+            <option value="accurate">Точное</option>
           </select>
         </div>
         <div style="margin: 10px 0;">
