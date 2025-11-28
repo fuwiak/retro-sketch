@@ -324,31 +324,27 @@ class OCRService:
                     openrouter_start = time.time()
                     
                     # Для PDF конвертируем первую страницу в изображение для OpenRouter
-                    # Для изображений используем напрямую
-                    if is_image:
-                        file_b64 = base64.b64encode(file_content).decode("utf-8")
-                    else:
-                        # Для PDF конвертируем в изображение
-                        if PDF2IMAGE_AVAILABLE:
-                            try:
-                                from pdf2image import convert_from_bytes
-                                # Конвертируем первую страницу в изображение с высоким DPI для лучшего OCR
-                                images = convert_from_bytes(file_content, dpi=400, first_page=1, last_page=1)
-                                if images:
-                                    # Конвертируем изображение в base64
-                                    img_buffer = io.BytesIO()
-                                    images[0].save(img_buffer, format='PNG')
-                                    img_buffer.seek(0)
-                                    file_b64 = base64.b64encode(img_buffer.getvalue()).decode("utf-8")
-                                    ocr_logger.info("   PDF конвертирован в изображение для OpenRouter")
-                                else:
-                                    raise Exception("Не удалось конвертировать PDF в изображение")
-                            except Exception as e:
-                                ocr_logger.warning(f"   Не удалось конвертировать PDF: {e}, пропускаем OpenRouter")
-                                file_b64 = None
-                        else:
-                            ocr_logger.warning("   pdf2image недоступен, пропускаем OpenRouter для PDF")
+                    # (Изображения уже обработаны выше, здесь только PDF)
+                    if PDF2IMAGE_AVAILABLE:
+                        try:
+                            from pdf2image import convert_from_bytes
+                            # Конвертируем первую страницу в изображение с высоким DPI для лучшего OCR
+                            images = convert_from_bytes(file_content, dpi=400, first_page=1, last_page=1)
+                            if images:
+                                # Конвертируем изображение в base64
+                                img_buffer = io.BytesIO()
+                                images[0].save(img_buffer, format='PNG')
+                                img_buffer.seek(0)
+                                file_b64 = base64.b64encode(img_buffer.getvalue()).decode("utf-8")
+                                ocr_logger.info("   PDF конвертирован в изображение для OpenRouter")
+                            else:
+                                raise Exception("Не удалось конвертировать PDF в изображение")
+                        except Exception as e:
+                            ocr_logger.warning(f"   Не удалось конвертировать PDF: {e}, пропускаем OpenRouter")
                             file_b64 = None
+                    else:
+                        ocr_logger.warning("   pdf2image недоступен, пропускаем OpenRouter для PDF")
+                        file_b64 = None
                 
                     if file_b64:
                         # Выбираем конкретную модель в зависимости от метода
