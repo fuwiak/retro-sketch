@@ -261,11 +261,18 @@ export async function processPdfWithOCR(file, languages = ['rus'], progressCallb
     
     // Groq полностью отключен - используется только OpenRouter + OCR fallback'и
     // Если backend не сработал, возвращаем ошибку без fallback на Groq
-    if (progressCallback) {
-      progressCallback(`❌ Backend OCR failed: ${error.message}`);
+    let errorMessage = error.message;
+    
+    // Обрабатываем таймаут
+    if (error.name === 'AbortError' || errorMessage.includes('timeout') || errorMessage.includes('failed to respond')) {
+      errorMessage = 'Таймаут при обработке OCR. Файл слишком большой или сервер перегружен. Попробуйте позже или используйте меньший файл.';
     }
     
-    throw new Error(`OCR processing failed: ${error.message}. Используется только OpenRouter + OCR fallback'и. Groq отключен.`);
+    if (progressCallback) {
+      progressCallback(`❌ Backend OCR failed: ${errorMessage}`);
+    }
+    
+    throw new Error(`OCR processing failed: ${errorMessage}. Используется только OpenRouter + OCR fallback'и. Groq отключен.`);
   }
 }
 
