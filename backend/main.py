@@ -128,29 +128,39 @@ async def process_ocr(
                 detail="OCR processing failed: service returned empty result. Используется только OpenRouter + OCR fallback'и."
             )
         
-        # Extract processing info
-        processing_info = result.get("processing_info", {}) if result else {}
+        # Extract processing info (безопасный доступ)
+        processing_info = {}
+        if isinstance(result, dict):
+            processing_info = result.get("processing_info", {}) or {}
         
         response_time = time.time() - start_time
         log_api_response("POST", "/api/ocr/process", 200, response_time)
         
+        method_used = processing_info.get('method', 'unknown') if isinstance(processing_info, dict) else 'unknown'
+        text_length = len(result.get('text', '')) if isinstance(result, dict) else 0
         api_logger.info(
-            f"OCR request completed - Method: {processing_info.get('method', 'unknown')}, "
-            f"Time: {response_time:.2f}s, Text length: {len(result.get('text', ''))} chars"
+            f"OCR request completed - Method: {method_used}, "
+            f"Time: {response_time:.2f}s, Text length: {text_length} chars"
         )
+        
+        # Безопасное извлечение данных из результата
+        result_text = result.get("text", "") if isinstance(result, dict) else ""
+        result_file_type = result.get("file_type", "unknown") if isinstance(result, dict) else "unknown"
+        result_pages = result.get("pages", 1) if isinstance(result, dict) else 1
+        result_metadata = result.get("metadata", {}) if isinstance(result, dict) else {}
         
         return {
             "success": True,
-            "text": result.get("text", ""),
-            "file_type": result.get("file_type", "unknown"),
-            "pages": result.get("pages", 1),
-            "metadata": result.get("metadata", {}),
+            "text": result_text,
+            "file_type": result_file_type,
+            "pages": result_pages,
+            "metadata": result_metadata,
             "processing_info": {
-                "method_used": processing_info.get("method", "unknown"),
-                "estimated_time": processing_info.get("estimated_time", 0),
-                "actual_time": processing_info.get("actual_time", 0),
-                "reasoning": processing_info.get("reasoning", ""),
-                "file_stats": processing_info.get("file_stats", {})
+                "method_used": processing_info.get("method", "unknown") if isinstance(processing_info, dict) else "unknown",
+                "estimated_time": processing_info.get("estimated_time", 0) if isinstance(processing_info, dict) else 0,
+                "actual_time": processing_info.get("actual_time", 0) if isinstance(processing_info, dict) else 0,
+                "reasoning": processing_info.get("reasoning", "") if isinstance(processing_info, dict) else "",
+                "file_stats": processing_info.get("file_stats", {}) if isinstance(processing_info, dict) else {}
             }
         }
     
