@@ -628,8 +628,8 @@ class OpenRouterService:
                         image = Image.fromarray(binary)
                         api_logger.info("   🔬 Применена адаптивная бинаризация (OpenCV)")
                     except (ImportError, OSError, AttributeError) as e:
-                    api_logger.debug(f"   ⚠️ OpenCV недоступен для бинаризации: {e}")
-                    # Fallback без OpenCV - используем PIL методы
+                        api_logger.debug(f"   ⚠️ OpenCV недоступен для бинаризации: {e}")
+                        # Fallback без OpenCV - используем PIL методы
             else:
                 # Fallback без OpenCV - используем PIL методы
                 image = image.convert('L')  # Grayscale
