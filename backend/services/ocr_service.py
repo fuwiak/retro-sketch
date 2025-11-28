@@ -252,11 +252,11 @@ class OCRService:
                         # Выбираем конкретную модель в зависимости от метода
                         model_to_use = None
                         if selected_method == OCRMethod.OPENROUTER_OLMOCR:
-                            model_to_use = "allenai/olmocr"
+                            model_to_use = "qwen/qwen2.5-vl-72b-instruct"  # Заменено на проверенную модель
                         elif selected_method == OCRMethod.OPENROUTER_GOTOCR:
-                            model_to_use = "got-ocr/got-ocr-2.0"
+                            model_to_use = "qwen/qwen2.5-vl-32b-instruct"  # Заменено на проверенную модель
                         elif selected_method == OCRMethod.OPENROUTER_MISTRAL:
-                            model_to_use = "mistralai/mistral-ocr"
+                            model_to_use = "internvl/internvl2-26b"  # Заменено на проверенную модель
                         # Для OPENROUTER_AUTO используем None (автоматический выбор)
                         
                         # Пробуем извлечь текст через OpenRouter

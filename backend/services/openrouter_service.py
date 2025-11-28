@@ -1,7 +1,7 @@
 """
 OpenRouter Service for sketch analysis and text extraction
 Handles vision models for drawing analysis and text extraction
-
+Nie 
 СИСТЕМА FALLBACK МОДЕЛЕЙ:
 - Приоритет отдается специализированным OCR моделям (Qwen, InternVL, GOT-OCR)
 - Затем используются универсальные модели высокого качества (GPT-4o, Claude, Gemini)
@@ -56,31 +56,23 @@ OPENROUTER_API_URL = os.getenv("OPENROUTER_API_URL", "https://openrouter.ai/api/
 # Порядок попыток подключения к API для анализа чертежей и извлечения текста
 # ПРИОРИТЕТ: специализированные OCR модели для максимально надежного извлечения текста
 DETECTION_FALLBACKS = [
-    # ===== СПЕЦИАЛИЗИРОВАННЫЕ OCR МОДЕЛИ ДЛЯ RASTER PDF (ВЫСШИЙ ПРИОРИТЕТ) =====
-    {"provider": "openrouter", "model": "allenai/olmocr"},  # olmOCR - специализируется на raster PDF, $190/млн страниц, alignment 0.875
-    {"provider": "openrouter", "model": "got-ocr/got-ocr-2.0"},  # GOT-OCR 2.0 - единая архитектура для текста, графиков, формул, таблиц, ultra-high res
-    {"provider": "openrouter", "model": "mistralai/mistral-ocr"},  # Mistral OCR - для сложных документов, PDF, таблицы, уравнения
-    
-    # ===== УНИВЕРСАЛЬНЫЕ OCR МОДЕЛИ (ВЫСОКИЙ ПРИОРИТЕТ) =====
-    {"provider": "openrouter", "model": "qwen/qwen3-vl-32b-instruct"},  # Qwen3-VL-32B - распознавание текста в 32 языках (rus/eng), контекст 256K
-    {"provider": "openrouter", "model": "qwen/qwen2.5-vl-72b-instruct"},  # Qwen2.5-VL-72B - высокая производительность OCR, DocVQA
-    {"provider": "openrouter", "model": "qwen/qwen2.5-vl-32b-instruct"},  # Qwen2.5-VL-32B - оптимизирован для визуальных задач, интерпретация текста
-    {"provider": "openrouter", "model": "internvl/internvl2-78b"},  # InternVL 2.5 78B - отличные результаты в анализе структур документов
-    {"provider": "openrouter", "model": "internvl/internvl2-26b"},  # InternVL 2.5 26B - высокий баланс скорости и качества
+    # ===== БЫСТРЫЕ И ЭФФЕКТИВНЫЕ OCR МОДЕЛИ (ВЫСШИЙ ПРИОРИТЕТ - ПРОВЕРЕНЫ) =====
+    {"provider": "openrouter", "model": "qwen/qwen2.5-vl-72b-instruct"},  # Qwen2.5-VL-72B - быстрая, высокая производительность OCR, DocVQA
+    {"provider": "openrouter", "model": "qwen/qwen2.5-vl-32b-instruct"},  # Qwen2.5-VL-32B - быстрая, оптимизирован для визуальных задач
+    {"provider": "openrouter", "model": "google/gemini-2.0-flash-001"},  # Gemini 2.0 Flash - очень быстрая
+    {"provider": "openrouter", "model": "google/gemini-2.0-flash-exp"},  # Gemini 2.0 Flash Experimental - быстрая, экспериментальная
+    {"provider": "openrouter", "model": "internvl/internvl2-26b"},  # InternVL 2.5 26B - баланс скорости и качества
     {"provider": "openrouter", "model": "internvl/internvl2-8b"},  # InternVL 2.5 8B - быстрая версия для OCR
     
-    # ===== УНИВЕРСАЛЬНЫЕ МОДЕЛИ (ВЫСОКОЕ КАЧЕСТВО) =====
-    {"provider": "openrouter", "model": "openai/gpt-4o"},  # GPT-4o - лучшая для технических чертежей
+    # ===== ВЫСОКОЕ КАЧЕСТВО OCR (СРЕДНИЙ ПРИОРИТЕТ) =====
+    {"provider": "openrouter", "model": "internvl/internvl2-78b"},  # InternVL 2.5 78B - отличные результаты в анализе структур документов
+    {"provider": "openrouter", "model": "qwen/qwen-2-vl-72b-instruct"},  # Qwen2-VL-72B - legacy, но работает
+    {"provider": "openrouter", "model": "openai/gpt-4o"},  # GPT-4o - лучшее качество для технических чертежей
     {"provider": "openrouter", "model": "anthropic/claude-3.5-sonnet"},  # Claude 3.5 Sonnet - баланс качества и стоимости
-    {"provider": "openrouter", "model": "google/gemini-1.5-pro"},  # Gemini 1.5 Pro - сильные возможности обработки изображений
     
-    # ===== БЕСПЛАТНЫЕ И БЮДЖЕТНЫЕ ВАРИАНТЫ =====
-    {"provider": "openrouter", "model": "qwen/qwen-2-vl-72b-instruct"},  # Qwen2-VL-72B - legacy версия
-    {"provider": "openrouter", "model": "google/gemini-2.0-flash-exp"},  # Gemini 2.0 Flash Experimental (бесплатная)
-    {"provider": "openrouter", "model": "google/gemini-2.0-flash-001"},  # Google Gemini 2.0 Flash
+    # ===== УНИВЕРСАЛЬНЫЕ МОДЕЛИ (НИЗКИЙ ПРИОРИТЕТ) =====
+    {"provider": "openrouter", "model": "google/gemini-1.5-pro"},  # Gemini 1.5 Pro - сильные возможности обработки изображений
     {"provider": "openrouter", "model": "mistralai/pixtral-large"},  # Pixtral Large - 124B параметров
-    {"provider": "openrouter", "model": "x-ai/grok-4.1-fast:free"},  # Grok 4.1 Fast (бесплатная)
-    {"provider": "openrouter", "model": "internvl/internvl2-1b"},  # InternVL 2.5 1B - минимальная версия для fine-tuning
 ]
 
 # Text models for translation
@@ -92,8 +84,8 @@ TEXT_MODELS = [
 ]
 
 # Настройки моделей по умолчанию
-# Используем специализированную OCR модель для raster PDF по умолчанию
-DEFAULT_VISION_MODEL = "allenai/olmocr"  # olmOCR - лучшая для raster PDF (сканированных документов)
+# Используем проверенную OCR модель для raster PDF по умолчанию
+DEFAULT_VISION_MODEL = "qwen/qwen2.5-vl-72b-instruct"  # Qwen2.5-VL-72B - быстрая и точная для OCR
 DEFAULT_TEXT_MODEL = "anthropic/claude-3.5-sonnet"  # Для перевода
 
 # Legacy compatibility
@@ -109,10 +101,115 @@ class OpenRouterService:
         self.vision_models = [m["model"] for m in DETECTION_FALLBACKS if m["provider"] == "openrouter"]
         self.text_models = [m["model"] for m in TEXT_MODELS if m["provider"] == "openrouter"]
         self.detection_fallbacks = DETECTION_FALLBACKS
+        self._cached_models = None  # Кэш для списка доступных моделей
     
     def is_available(self) -> bool:
         """Check if OpenRouter service is available"""
         return bool(self.api_key)
+    
+    async def get_available_models(self) -> Optional[List[Dict]]:
+        """
+        Получает список доступных моделей из OpenRouter API
+        Returns: список моделей с информацией (id, name, pricing, context_length, etc.)
+        """
+        if not self.api_key:
+            return None
+        
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "HTTP-Referer": "https://retro-sketch.app",
+                "X-Title": "Retro Sketch Analyzer"
+            }
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(
+                    "https://openrouter.ai/api/v1/models",
+                    headers=headers
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    models = data.get("data", [])
+                    api_logger.info(f"✅ Получен список моделей: {len(models)} доступных моделей")
+                    return models
+                else:
+                    api_logger.warning(f"⚠️ Не удалось получить список моделей: HTTP {response.status_code}")
+                    return None
+        except Exception as e:
+            api_logger.error(f"❌ Ошибка при получении списка моделей: {e}")
+            return None
+    
+    def _find_similar_model(self, model_name: str, available_models: List[Dict]) -> Optional[str]:
+        """
+        Находит наиболее похожую модель из списка доступных
+        Использует fuzzy matching для поиска похожих названий
+        """
+        if not available_models:
+            return None
+        
+        model_name_lower = model_name.lower()
+        
+        # Сначала ищем точное совпадение (case-insensitive)
+        for model in available_models:
+            model_id = model.get("id", "")
+            if model_id.lower() == model_name_lower:
+                return model_id
+        
+        # Затем ищем частичное совпадение
+        # Разбиваем название модели на части
+        parts = model_name_lower.replace("/", " ").replace("-", " ").split()
+        
+        best_match = None
+        best_score = 0
+        
+        for model in available_models:
+            model_id = model.get("id", "").lower()
+            score = 0
+            
+            # Подсчитываем совпадения частей
+            for part in parts:
+                if part in model_id:
+                    score += len(part)
+            
+            # Бонус за начало совпадения
+            if model_id.startswith(parts[0]):
+                score += 10
+            
+            # Если в названии модели есть OCR, vision, VL - бонус
+            if any(keyword in model_id for keyword in ["ocr", "vision", "vl", "visual"]):
+                score += 5
+            
+            if score > best_score:
+                best_score = score
+                best_match = model.get("id")
+        
+        return best_match if best_score > 0 else None
+    
+    async def validate_and_fix_model_name(self, model_name: str) -> Optional[str]:
+        """
+        Валидирует название модели и исправляет его на доступное, если нужно
+        Returns: исправленное название модели или None если не найдено
+        """
+        if not self.api_key:
+            return None
+        
+        # Кэшируем список моделей
+        if not hasattr(self, '_cached_models') or self._cached_models is None:
+            self._cached_models = await self.get_available_models()
+        
+        if not self._cached_models:
+            return None
+        
+        # Ищем модель
+        fixed_model = self._find_similar_model(model_name, self._cached_models)
+        
+        if fixed_model and fixed_model != model_name:
+            api_logger.info(f"🔧 Модель '{model_name}' не найдена, исправлено на '{fixed_model}'")
+        elif fixed_model:
+            api_logger.debug(f"✅ Модель '{model_name}' валидна")
+        
+        return fixed_model
     
     async def analyze_sketch_with_vision(
         self,
@@ -386,6 +483,16 @@ class OpenRouterService:
         
         for idx, model_name in enumerate(models_to_try, 1):
             try:
+                # Валидируем и исправляем название модели
+                validated_model = await self.validate_and_fix_model_name(model_name)
+                if not validated_model:
+                    api_logger.warning(f"⚠️ Модель '{model_name}' не найдена, пропускаем...")
+                    continue
+                
+                if validated_model != model_name:
+                    api_logger.info(f"🔧 Модель исправлена: '{model_name}' -> '{validated_model}'")
+                    model_name = validated_model
+                
                 api_logger.info(f"📝 Попытка {idx}/{len(models_to_try)}: Извлечение текста с моделью {model_name}")
                 
                 url = self.api_url
@@ -435,7 +542,14 @@ class OpenRouterService:
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     response = await client.post(url, headers=headers, json=payload)
                     
-                    if response.status_code != 200:
+                    if response.status_code == 400 or response.status_code == 404:
+                        # Модель не существует - пропускаем и пробуем следующую
+                        error_text = response.text[:500] if response.text else "No error message"
+                        api_logger.warning(f"Model {model_name} failed: HTTP {response.status_code}")
+                        api_logger.warning(f"   Ошибка: {error_text}")
+                        # Если модель не валидна, пропускаем её
+                        continue
+                    elif response.status_code != 200:
                         error_text = response.text[:500] if response.text else "No error message"
                         api_logger.warning(f"Model {model_name} failed: HTTP {response.status_code}")
                         api_logger.warning(f"   Ошибка: {error_text}")
