@@ -388,14 +388,39 @@ class CloudService:
             # Если URL уже является API endpoint, пробуем его, но если 403 - fallback на публичный URL
             if '/api/v2/file/download' in url:
                 api_logger.info("URL is already an API endpoint, trying it directly")
-                try:
-                    # Добавляем дополнительные заголовки для Mail.ru Cloud API
-                    headers = {
-                        'Referer': 'https://cloud.mail.ru/',
-                        'Origin': 'https://cloud.mail.ru'
-                    }
-                    response = self.session.get(url, timeout=30, stream=True, allow_redirects=True, headers=headers)
-                    response.raise_for_status()
+                # Добавляем дополнительные заголовки для Mail.ru Cloud API
+                headers = {
+                    'Referer': 'https://cloud.mail.ru/',
+                    'Origin': 'https://cloud.mail.ru'
+                }
+                response = self.session.get(url, timeout=30, stream=True, allow_redirects=True, headers=headers)
+                
+                # Проверяем статус перед raise_for_status() чтобы обработать 403
+                if response.status_code == 403:
+                    api_logger.warning(f"API endpoint returned 403 Forbidden, trying public URL fallback")
+                    # Извлекаем weblink и пробуем публичный URL
+                    import re
+                    weblink_match = re.search(r'weblink=([^&]+)', url)
+                    if weblink_match:
+                        weblink = weblink_match.group(1)
+                        # Декодируем weblink (может содержать URL-encoded символы)
+                        from urllib.parse import unquote
+                        try:
+                            weblink_decoded = unquote(weblink)
+                            api_logger.info(f"Decoded weblink: {weblink_decoded}")
+                        except:
+                            weblink_decoded = weblink
+                        
+                        # Пробуем публичный URL с декодированным weblink
+                        public_url = f"https://cloud.mail.ru/public/{weblink_decoded}"
+                        api_logger.info(f"Trying public URL fallback: {public_url}")
+                        # Продолжим обработку как обычный URL ниже - выходим из блока API endpoint
+                        url = public_url
+                    else:
+                        # Если не удалось извлечь weblink, пробуем обработать как обычный URL
+                        api_logger.warning(f"Could not extract weblink from API URL, continuing with original URL")
+                elif response.status_code == 200:
+                    # Успешный ответ от API endpoint
                     content = response.content
                     
                     # Проверяем, что это файл, а не HTML
@@ -406,40 +431,26 @@ class CloudService:
                             return content
                         else:
                             api_logger.warning("API endpoint returned HTML instead of file")
-                except requests.exceptions.HTTPError as e:
-                    if e.response and e.response.status_code == 403:
-                        api_logger.warning(f"API endpoint returned 403 Forbidden, trying public URL fallback")
-                        # Извлекаем weblink и пробуем публичный URL
-                        import re
-                        weblink_match = re.search(r'weblink=([^&]+)', url)
-                        if weblink_match:
-                            weblink = weblink_match.group(1)
-                            # Декодируем weblink (может содержать URL-encoded символы)
-                            from urllib.parse import unquote
-                            try:
-                                weblink_decoded = unquote(weblink)
-                                api_logger.info(f"Decoded weblink: {weblink_decoded}")
-                            except:
-                                weblink_decoded = weblink
-                            
-                            # Пробуем публичный URL с декодированным weblink
-                            public_url = f"https://cloud.mail.ru/public/{weblink_decoded}"
-                            api_logger.info(f"Trying public URL fallback: {public_url}")
-                            # Продолжим обработку как обычный URL ниже - выходим из блока API endpoint
-                            url = public_url
-                        else:
-                            # Если не удалось извлечь weblink, пробуем обработать как обычный URL
-                            api_logger.warning(f"Could not extract weblink from API URL, continuing with original URL")
-                    else:
-                        raise
-                except Exception as e:
-                    api_logger.warning(f"API endpoint failed: {str(e)}, trying public URL fallback")
-                    # Извлекаем weblink и пробуем публичный URL
+                            # HTML вместо файла - пробуем fallback
+                            import re
+                            weblink_match = re.search(r'weblink=([^&]+)', url)
+                            if weblink_match:
+                                weblink = weblink_match.group(1)
+                                from urllib.parse import unquote
+                                try:
+                                    weblink_decoded = unquote(weblink)
+                                except:
+                                    weblink_decoded = weblink
+                                public_url = f"https://cloud.mail.ru/public/{weblink_decoded}"
+                                api_logger.info(f"Trying public URL fallback: {public_url}")
+                                url = public_url
+                else:
+                    # Другая ошибка - пробуем fallback
+                    api_logger.warning(f"API endpoint returned status {response.status_code}, trying public URL fallback")
                     import re
                     weblink_match = re.search(r'weblink=([^&]+)', url)
                     if weblink_match:
                         weblink = weblink_match.group(1)
-                        # Декодируем weblink
                         from urllib.parse import unquote
                         try:
                             weblink_decoded = unquote(weblink)
