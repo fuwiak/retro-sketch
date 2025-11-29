@@ -448,8 +448,28 @@ class CloudService:
                     
                     # Try to find script tags with download URLs
                     # Filter out promotional/advertisement URLs immediately
-                    promotional_domains = ['promoimages.hb.ru-msk.vkcloud-storage.ru', 'promo', 'advertising', 'реклама']
-                    promotional_keywords = ['акция', 'литрес', 'mail space', 'promo', 'реклама', 'advertisement', 'action_mailspace']
+                    promotional_domains = [
+                        'promoimages.hb.ru-msk.vkcloud-storage.ru',
+                        'vkcloud-storage.ru',
+                        'imgs2.imgsmail.ru',
+                        'imgsmail.ru',
+                        'promo',
+                        'advertising',
+                        'реклама',
+                        'nestle'
+                    ]
+                    promotional_keywords = [
+                        'акция',
+                        'литрес',
+                        'mail space',
+                        'promo',
+                        'реклама',
+                        'advertisement',
+                        'action_mailspace',
+                        'pet-34',
+                        'static/cloud',
+                        'desktop'
+                    ]
                     
                     for script in soup.find_all('script'):
                         if script.string:
@@ -523,8 +543,28 @@ class CloudService:
                                 api_logger.warning(f"Alternative download URL (original) failed: {str(e)}")
                     
                     # If we found download links, filter out promotional ones and try them
-                    promotional_domains = ['promoimages.hb.ru-msk.vkcloud-storage.ru', 'promo', 'advertising', 'реклама']
-                    promotional_keywords = ['акция', 'литрес', 'mail space', 'promo', 'реклама', 'advertisement', 'action_mailspace']
+                    promotional_domains = [
+                        'promoimages.hb.ru-msk.vkcloud-storage.ru', 
+                        'vkcloud-storage.ru',
+                        'imgs2.imgsmail.ru',
+                        'imgsmail.ru',
+                        'nestle',
+                        'promo',
+                        'advertising',
+                        'реклама'
+                    ]
+                    promotional_keywords = [
+                        'акция', 
+                        'литрес', 
+                        'mail space', 
+                        'promo', 
+                        'реклама', 
+                        'advertisement', 
+                        'action_mailspace',
+                        'pet-34',
+                        'desktop',
+                        'static/cloud'
+                    ]
                     
                     # Filter out promotional links
                     filtered_links = []
