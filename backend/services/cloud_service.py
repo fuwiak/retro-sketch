@@ -544,26 +544,30 @@ class CloudService:
                     
                     # If we found download links, filter out promotional ones and try them
                     promotional_domains = [
-                        'promoimages.hb.ru-msk.vkcloud-storage.ru', 
+                        'promoimages.hb.ru-msk.vkcloud-storage.ru',
                         'vkcloud-storage.ru',
                         'imgs2.imgsmail.ru',
                         'imgsmail.ru',
+                        'r.mradx.net',
+                        'mradx.net',
                         'nestle',
                         'promo',
                         'advertising',
                         'реклама'
                     ]
                     promotional_keywords = [
-                        'акция', 
-                        'литрес', 
-                        'mail space', 
-                        'promo', 
-                        'реклама', 
-                        'advertisement', 
+                        'акция',
+                        'литрес',
+                        'mail space',
+                        'promo',
+                        'реклама',
+                        'advertisement',
                         'action_mailspace',
                         'pet-34',
                         'desktop',
-                        'static/cloud'
+                        'static/cloud',
+                        '/img/',
+                        '9aac10'
                     ]
                     
                     # Filter out promotional links - STRICT: only Mail.ru Cloud links
@@ -612,13 +616,17 @@ class CloudService:
                                             'vkcloud-storage.ru',
                                             'imgs2.imgsmail.ru',
                                             'imgsmail.ru',
+                                            'r.mradx.net',
+                                            'mradx.net',
                                             'nestle'
                                         ]
                                         promotional_check_keywords = [
                                             'action_mailspace',
                                             'pet-34',
                                             'static/cloud',
-                                            'desktop'
+                                            'desktop',
+                                            '/img/',
+                                            '9aac10'
                                         ]
                                         
                                         if any(domain in download_link_lower for domain in promotional_check_domains):
@@ -629,8 +637,23 @@ class CloudService:
                                             api_logger.warning(f"Skipping promotional file (keyword): {download_link[:100]}")
                                             continue
                                         
-                                        # Verify filename matches expected if provided
+                                        # CRITICAL: Check file extension matches expected filename
                                         if expected_filename:
+                                            # Get expected file extension
+                                            expected_ext = expected_filename.lower().split('.')[-1] if '.' in expected_filename else ''
+                                            # Get URL file extension
+                                            url_ext = download_link_lower.split('.')[-1].split('?')[0].split('/')[-1] if '.' in download_link_lower else ''
+                                            
+                                            # If expected is PDF, but URL is PNG/JPG - skip (likely advertisement)
+                                            if expected_ext == 'pdf' and url_ext in ['png', 'jpg', 'jpeg', 'gif']:
+                                                api_logger.warning(f"Extension mismatch: expected PDF, but URL is {url_ext.upper()}: {download_link[:100]}")
+                                                continue
+                                            
+                                            # If expected is PNG/JPG, but URL is PDF - might be OK, but log
+                                            if expected_ext in ['png', 'jpg', 'jpeg'] and url_ext == 'pdf':
+                                                api_logger.warning(f"Extension mismatch: expected {expected_ext.upper()}, but URL is PDF: {download_link[:100]}")
+                                                # Continue anyway - might be valid conversion
+                                            
                                             # Extract base name from expected filename
                                             expected_name_base = expected_filename.lower().split('.')[0].replace(' ', '').replace('-', '').replace('_', '').replace('/', '')
                                             # Decode URL to check filename
