@@ -555,12 +555,12 @@ class CloudService:
                                     'Origin': 'https://cloud.mail.ru'
                                 }
                                 alt_response = self.session.get(download_url, timeout=30, stream=True, allow_redirects=True, headers=headers)
-                            if alt_response.status_code == 200:
-                                alt_content = alt_response.content
-                                # Check if it's actually a file
+                                if alt_response.status_code == 200:
+                                    alt_content = alt_response.content
+                                    # Check if it's actually a file
                                     if len(alt_content) > 1000 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
                                         api_logger.info(f"Successfully downloaded using API URL with full weblink path")
-                                    return alt_content
+                                        return alt_content
                                 elif alt_response.status_code == 403:
                                     api_logger.warning(f"API returned 403 for weblink, will try direct public URL")
                             except Exception as e:
@@ -655,7 +655,7 @@ class CloudService:
                                 api_logger.info(f"Trying download link {i+1}/{min(len(filtered_links), 5)}: {download_link[:100]}...")
                                 alt_response = self.session.get(download_link, timeout=30, stream=True, allow_redirects=True)
                                 if alt_response.status_code == 200:
-                        alt_content = alt_response.content
+                                    alt_content = alt_response.content
                                     # Additional check: verify file size is reasonable (not a tiny HTML page)
                                     if len(alt_content) > 1000 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
                                         # Check link type - prefer Mail.ru Cloud, but allow external if matches filename
