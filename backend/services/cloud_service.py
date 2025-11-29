@@ -132,15 +132,15 @@ class CloudService:
                                                         download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={item_weblink}"
                                                     else:
                                                         # Fallback на публичную ссылку
-                                                    download_url = item_url
-                                                    files.append({
-                                                        'name': item_name,
-                                                        'type': 'file',
-                                                        'path': '',
-                                                        'url': download_url,
-                                                        'download_url': download_url,
-                                                        'weblink': item_weblink  # Сохраняем weblink для использования
-                                                    })
+                                                        download_url = item_url
+                                                        files.append({
+                                                            'name': item_name,
+                                                            'type': 'file',
+                                                            'path': '',
+                                                            'url': download_url,
+                                                            'download_url': download_url,
+                                                            'weblink': item_weblink  # Сохраняем weblink для использования
+                                                        })
                             except Exception as e:
                                 api_logger.debug(f"Error parsing list array: {str(e)}")
                                 pass
@@ -300,16 +300,16 @@ class CloudService:
                                                 download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={item_weblink}"
                                             else:
                                                 # Fallback на публичную ссылку
-                                            download_url = item_url
-                                            
-                                            items.append({
-                                                'name': item_name,
-                                                'type': 'file',
-                                                'path': folder_name,
-                                                'url': download_url,
-                                                'download_url': download_url,
-                                                'weblink': item_weblink  # Сохраняем weblink для использования
-                                            })
+                                                download_url = item_url
+                                                
+                                                items.append({
+                                                    'name': item_name,
+                                                    'type': 'file',
+                                                    'path': folder_name,
+                                                    'url': download_url,
+                                                    'download_url': download_url,
+                                                    'weblink': item_weblink  # Сохраняем weblink для использования
+                                                })
                                 break
                             except Exception as e:
                                 api_logger.debug(f"Error parsing folder JSON: {str(e)}")
@@ -660,20 +660,22 @@ class CloudService:
                             encoded_weblink = quote(weblink_path, safe='/')
                             download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={encoded_weblink}"
                             api_logger.info(f"Trying API download URL with full weblink path: {download_url[:150]}")
+
                             try:
+                            
                                 headers = {
                                     'Referer': 'https://cloud.mail.ru/',
                                     'Origin': 'https://cloud.mail.ru'
                                 }
                                 alt_response = self.session.get(download_url, timeout=30, stream=True, allow_redirects=True, headers=headers)
-                            if alt_response.status_code == 200:
-                                alt_content = alt_response.content
-                                # Check if it's actually a file
+                                if alt_response.status_code == 200:
+                                    alt_content = alt_response.content
                                     if len(alt_content) > 1000 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
                                         api_logger.info(f"Successfully downloaded using API URL with full weblink path")
-                                    return alt_content
+                                        return alt_content
                                 elif alt_response.status_code == 403:
                                     api_logger.warning(f"API returned 403 for weblink, will try direct public URL")
+                            
                             except Exception as e:
                                 api_logger.warning(f"API download URL failed: {str(e)}")
                             
