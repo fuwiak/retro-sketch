@@ -19,3 +19,7 @@ requests==2.31.0
 # OCR работает отлично без них, используя OpenRouter и Tesseract
 # Если нужно использовать PaddleOCR, установите его отдельно: pip install paddlepaddle paddleocr
 
+# LangChain OCR Library - опциональный fallback для OCR обработки
+# Устанавливается отдельно если нужно: pip install langchain-ocr-lib
+# Или альтернативно: pip install langchain-ocr
+

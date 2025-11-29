@@ -28,6 +28,18 @@ try:
 except ImportError:
     PDF2IMAGE_AVAILABLE = False
 
+# LangChain OCR Library (optional fallback)
+try:
+    from langchain_ocr_lib import OCRChain
+    LANGCHAIN_OCR_AVAILABLE = True
+except ImportError:
+    try:
+        # Alternative import name
+        from langchain_ocr import OCRChain
+        LANGCHAIN_OCR_AVAILABLE = True
+    except ImportError:
+        LANGCHAIN_OCR_AVAILABLE = False
+
 from services.logger import ocr_logger, log_ocr_request, log_ocr_result
 from services.ocr_agent import OCRSelectionAgent, PDFType, OCRMethod, OCRQuality, TextType
 
@@ -42,6 +54,7 @@ class OCRService:
         self.openrouter_service = openrouter_service  # Будет передан из main.py
         self.tesseract_available = TESSERACT_AVAILABLE
         self.pdf2image_available = PDF2IMAGE_AVAILABLE
+        self.langchain_ocr_available = LANGCHAIN_OCR_AVAILABLE
         self.agent = OCRSelectionAgent(openrouter_service=openrouter_service)  # AI агент для выбора метода
     
     def is_available(self) -> bool:
@@ -140,6 +153,82 @@ class OCRService:
                 all_text.append(text)
             
             return "\n\n--- Page Break ---\n\n".join(all_text)
+    
+    async def _process_with_langchain_ocr(
+        self,
+        file_content: bytes,
+        file_type: str,
+        languages: List[str]
+    ) -> Optional[str]:
+        """
+        Process file with LangChain OCR Library (fallback method)
+        Converts image and PDF documents into clean Markdown
+        """
+        if not self.langchain_ocr_available:
+            return None
+        
+        try:
+            ocr_logger.info("🔄 Шаг 3: Пробуем LangChain OCR Library...")
+            
+            # Create OCR chain
+            if LANGCHAIN_OCR_AVAILABLE:
+                try:
+                    from langchain_ocr_lib import OCRChain
+                except ImportError:
+                    try:
+                        from langchain_ocr import OCRChain
+                    except ImportError:
+                        ocr_logger.warning("⚠️ LangChain OCR Library не найден, пропускаем")
+                        return None
+                
+                # Initialize OCR chain
+                ocr_chain = OCRChain()
+                
+                is_image = file_type.startswith("image/")
+                
+                if is_image:
+                    # Process image
+                    from PIL import Image
+                    image = Image.open(io.BytesIO(file_content))
+                    # Save to temporary bytes
+                    img_buffer = io.BytesIO()
+                    image.save(img_buffer, format='PNG')
+                    img_buffer.seek(0)
+                    
+                    # Process with LangChain OCR
+                    result = ocr_chain.run(image=img_buffer.getvalue())
+                    if result and hasattr(result, 'text'):
+                        text = result.text
+                    elif isinstance(result, str):
+                        text = result
+                    else:
+                        text = str(result) if result else None
+                    
+                    if text and len(text.strip()) > 0:
+                        ocr_logger.info(f"✅ LangChain OCR успешно извлек текст: {len(text)} символов")
+                        return text
+                else:
+                    # Process PDF - save to temporary file or use directly
+                    pdf_buffer = io.BytesIO(file_content)
+                    
+                    # Process with LangChain OCR
+                    result = ocr_chain.run(pdf=pdf_buffer)
+                    if result and hasattr(result, 'text'):
+                        text = result.text
+                    elif isinstance(result, str):
+                        text = result
+                    else:
+                        text = str(result) if result else None
+                    
+                    if text and len(text.strip()) > 0:
+                        ocr_logger.info(f"✅ LangChain OCR успешно извлек текст из PDF: {len(text)} символов")
+                        return text
+                        
+        except Exception as e:
+            ocr_logger.warning(f"⚠️ LangChain OCR не сработал: {e}")
+            return None
+        
+        return None
     
     async def process_file(
         self,
@@ -409,6 +498,21 @@ class OCRService:
                         ocr_logger.error(f"Tesseract OCR не сработал: {e}")
                         ocr_text = None
         
+        # ШАГ 3: Если все предыдущие методы не сработали, пробуем LangChain OCR Library
+        if not ocr_text or len(ocr_text.strip()) == 0:
+            if self.langchain_ocr_available:
+                try:
+                    ocr_logger.info("🔄 Шаг 3: Все стандартные методы не сработали, пробуем LangChain OCR Library...")
+                    langchain_text = await self._process_with_langchain_ocr(file_content, file_type, languages)
+                    
+                    if langchain_text and len(langchain_text.strip()) > 0:
+                        ocr_text = langchain_text
+                        processing_info["method"] = "langchain_ocr"
+                        processing_info["fallback_used"] = True
+                        ocr_logger.info(f"✅ LangChain OCR успешно извлек текст: {len(ocr_text)} символов")
+                except Exception as e:
+                    ocr_logger.warning(f"⚠️ LangChain OCR не сработал: {e}")
+        
         # Проверяем результат
         actual_time = time.time() - start_time
         processing_info["actual_time"] = actual_time
@@ -419,7 +523,8 @@ class OCRService:
             ocr_logger.error(f"   OpenRouter доступен: {self.openrouter_service and self.openrouter_service.is_available()}")
             ocr_logger.error(f"   Tesseract доступен: {self.tesseract_available}")
             ocr_logger.error(f"   PDF2Image доступен: {self.pdf2image_available}")
-            raise Exception("OCR processing failed: все методы (OpenRouter, PyPDF2, Tesseract) не смогли извлечь текст")
+            ocr_logger.error(f"   LangChain OCR доступен: {self.langchain_ocr_available}")
+            raise Exception("OCR processing failed: все методы (OpenRouter, PyPDF2, Tesseract, LangChain OCR) не смогли извлечь текст")
             
             ocr_logger.info(
                 f"OCR completed - Method: {processing_info['method']}, "
