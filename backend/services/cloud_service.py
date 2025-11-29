@@ -145,73 +145,13 @@ class CloudService:
                                 pass
             
             # Approach 2: Parse HTML - look for file items in Mail.ru Cloud structure
+            # SKIP HTML parsing to avoid finding promotional/advertisement files
+            # Mail.ru Cloud HTML often contains promotional PDFs that are not part of the folder
+            # We should only use JSON structure parsing (Approach 1) or API (Approach 3)
             if not files:
-                # Look for file items in common Mail.ru Cloud HTML structures
-                # Try different selectors that Mail.ru Cloud might use
-                file_elements = soup.find_all(['a', 'div'], class_=re.compile(r'file|item|entry', re.I))
-                
-                for elem in file_elements:
-                    href = elem.get('href', '')
-                    if not href:
-                        # Try to find link inside
-                        link = elem.find('a', href=True)
-                        if link:
-                            href = link.get('href', '')
-                    
-                    text = elem.get_text(strip=True)
-                    if not text:
-                        # Try to find name in data attributes or title
-                        text = elem.get('title') or elem.get('data-name') or elem.get('data-title', '')
-                    
-                    # Check if it's a file link
-                    if href and ('.pdf' in href.lower() or '.png' in href.lower() or 
-                                 '.jpg' in href.lower() or '.jpeg' in href.lower() or
-                                 '.gif' in href.lower() or '.bmp' in href.lower()):
-                        if href.startswith('//'):
-                            file_url = f"https:{href}"
-                        elif href.startswith('/'):
-                            file_url = f"https://cloud.mail.ru{href}"
-                        elif not href.startswith('http'):
-                            file_url = f"{url}/{href}" if not url.endswith('/') else f"{url}{href}"
-                        else:
-                            file_url = href
-                        
-                        file_name = text or href.split('/')[-1].split('?')[0]
-                        if file_name:
-                            files.append({
-                                'name': file_name,
-                                'type': 'file',
-                                'url': file_url,
-                                'download_url': file_url,
-                                'path': ''
-                            })
-                
-                # Also try generic links
-                if not files:
-                    links = soup.find_all('a', href=True)
-                    for link in links:
-                        href = link.get('href', '')
-                        text = link.get_text(strip=True)
-                        
-                        # Check if it's a file link
-                        if href and ('.pdf' in href.lower() or '.png' in href.lower() or 
-                                     '.jpg' in href.lower() or '.jpeg' in href.lower()):
-                            if href.startswith('//'):
-                                file_url = f"https:{href}"
-                            elif href.startswith('/'):
-                                file_url = f"https://cloud.mail.ru{href}"
-                            elif not href.startswith('http'):
-                                file_url = f"{url}/{href}" if not url.endswith('/') else f"{url}{href}"
-                            else:
-                                file_url = href
-                            
-                            files.append({
-                                'name': text or href.split('/')[-1].split('?')[0],
-                                'type': 'file',
-                                'url': file_url,
-                                'download_url': file_url,
-                                'path': ''
-                            })
+                api_logger.warning("HTML parsing skipped to avoid promotional files. Using only JSON/API methods.")
+                # We skip HTML parsing entirely to avoid false positives from promotional content
+                pass
             
             # Approach 3: Try Mail.ru Cloud API with proper structure
             if not files:
