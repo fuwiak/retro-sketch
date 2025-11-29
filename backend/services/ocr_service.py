@@ -17,7 +17,7 @@ except ImportError:
 
 try:
     import pytesseract
-    from PIL import Image
+    from PIL import Image, ImageEnhance, ImageFilter
     TESSERACT_AVAILABLE = True
 except ImportError:
     TESSERACT_AVAILABLE = False
@@ -157,7 +157,7 @@ class OCRService:
                         
                         if page_text:
                             all_text.append(page_text)
-                        else:
+        else:
                             # Fallback: пробуем без preprocessing
                             try:
                                 text = pytesseract.image_to_string(img, lang=tesseract_langs, config='--psm 6 --oem 3')
