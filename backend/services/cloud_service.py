@@ -219,18 +219,31 @@ class CloudService:
                 name = item.get('name', '')
                 path = item.get('path', '')
                 item_type = item.get('type') or item.get('kind', 'file')  # Get type from API or default to 'file'
-                # Mail.ru Cloud API may return different structures
-                download_url = item.get('weblink') or item.get('download_url') or item.get('url')
-                if download_url and not download_url.startswith('http'):
-                    download_url = f"https://cloud.mail.ru{download_url}"
-                elif not download_url:
-                    download_url = f"{base_url}/{name}"
+                item_weblink = item.get('weblink', '')
+                
+                # Build URL - для файлов используем API endpoint, для папок - публичный URL
+                if item_type == 'folder':
+                    if item_weblink:
+                        download_url = f"https://cloud.mail.ru/public/{item_weblink}"
+                    else:
+                        download_url = f"{base_url}/{name}" if base_url else name
+                else:  # file
+                    if item_weblink:
+                        # Для файлов используем API endpoint для прямого скачивания
+                        download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={item_weblink}"
+                    else:
+                        # Fallback
+                        download_url = item.get('download_url') or item.get('url') or f"{base_url}/{name}"
+                        if download_url and not download_url.startswith('http'):
+                            download_url = f"https://cloud.mail.ru{download_url}"
+                
                 files.append({
                     'name': name,
                     'type': 'folder' if item_type == 'folder' else 'file',
                     'path': path,
                     'url': download_url,
-                    'download_url': download_url
+                    'download_url': download_url,
+                    'weblink': item_weblink  # Сохраняем weblink для файлов
                 })
         return files
     
