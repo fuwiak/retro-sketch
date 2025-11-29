@@ -326,7 +326,28 @@ class CloudService:
         try:
             api_logger.info(f"Downloading file: {url}")
             
-            # Если URL уже является API endpoint, пробуем его, но если 403 - fallback на публичный URL
+            # Если URL уже является публичным URL, пробуем его напрямую сначала
+            # Публичные URL часто работают лучше для файлов с кириллицей
+            if '/public/' in url and '/api/v2/file/download' not in url:
+                api_logger.info("URL is a public URL, trying direct download first")
+                try:
+                    direct_response = self.session.get(url, timeout=30, stream=True, allow_redirects=True, headers={
+                        'Referer': 'https://cloud.mail.ru/',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    })
+                    if direct_response.status_code == 200:
+                        direct_content = direct_response.content
+                        direct_content_type = direct_response.headers.get('Content-Type', '').lower()
+                        # Проверяем, что это файл, а не HTML
+                        if len(direct_content) > 1000:
+                            first_bytes_direct = direct_content[:4]
+                            if not (first_bytes_direct[0:2] == b'<!' or b'<html' in direct_content[:100].lower()) and 'text/html' not in direct_content_type:
+                                api_logger.info("Successfully downloaded via direct public URL")
+                                return direct_content
+                except Exception as e:
+                    api_logger.debug(f"Direct public URL download failed: {str(e)}")
+            
+            # Если URL уже является API endpoint, пробуем его, но если 403 или HTML - fallback на публичный URL
             if '/api/v2/file/download' in url:
                 api_logger.info("URL is already an API endpoint, trying it directly")
                 # Добавляем дополнительные заголовки для Mail.ru Cloud API
