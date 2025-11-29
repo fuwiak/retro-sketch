@@ -219,7 +219,7 @@ class OCRSelectionAgent:
             # Fallback: по умолчанию считаем печатным
             ocr_logger.info("✍️ Тип текста: ПЕЧАТНЫЙ (по умолчанию)")
             return TextType.PRINTED
-            
+        
         except Exception as e:
             ocr_logger.error(f"❌ Ошибка при определении типа текста: {e}")
             return TextType.UNKNOWN
