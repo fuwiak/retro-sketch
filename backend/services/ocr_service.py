@@ -33,12 +33,7 @@ try:
     from langchain_ocr_lib import OCRChain
     LANGCHAIN_OCR_AVAILABLE = True
 except ImportError:
-    try:
-        # Alternative import name
-        from langchain_ocr import OCRChain
-        LANGCHAIN_OCR_AVAILABLE = True
-    except ImportError:
-        LANGCHAIN_OCR_AVAILABLE = False
+    LANGCHAIN_OCR_AVAILABLE = False
 
 from services.logger import ocr_logger, log_ocr_request, log_ocr_result
 from services.ocr_agent import OCRSelectionAgent, PDFType, OCRMethod, OCRQuality, TextType
@@ -172,14 +167,7 @@ class OCRService:
             
             # Create OCR chain
             if LANGCHAIN_OCR_AVAILABLE:
-                try:
-                    from langchain_ocr_lib import OCRChain
-                except ImportError:
-                    try:
-                        from langchain_ocr import OCRChain
-                    except ImportError:
-                        ocr_logger.warning("⚠️ LangChain OCR Library не найден, пропускаем")
-                        return None
+                from langchain_ocr_lib import OCRChain
                 
                 # Initialize OCR chain
                 ocr_chain = OCRChain()
