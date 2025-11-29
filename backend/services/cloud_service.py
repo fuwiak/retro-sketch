@@ -417,6 +417,36 @@ class CloudService:
                     api_logger.warning(f"Received HTML instead of file. Content-Type: {content_type}, First bytes: {first_bytes}")
                     api_logger.warning(f"HTML preview: {content[:500].decode('utf-8', errors='ignore')}")
                     
+                    # If we already have a public URL with weblink, try to use it directly for download
+                    # This handles files in subfolders like /public/2RNv/faZLz1cLQ/0002/filename.pdf
+                    if '/public/' in url and expected_filename:
+                        api_logger.info(f"Trying to construct direct download URL from weblink in URL path")
+                        # Extract full weblink path from URL: /public/2RNv/faZLz1cLQ/0002/filename.pdf
+                        weblink_match = re.search(r'/public/(.+)$', url)
+                        if weblink_match:
+                            full_weblink_path = weblink_match.group(1)
+                            api_logger.info(f"Extracted weblink path: {full_weblink_path}")
+                            
+                            # Try direct API download with full weblink path
+                            from urllib.parse import quote
+                            encoded_weblink = quote(full_weblink_path, safe='/')
+                            api_download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={encoded_weblink}"
+                            
+                            api_logger.info(f"Trying direct API download with weblink path: {api_download_url[:150]}")
+                            try:
+                                headers = {
+                                    'Referer': 'https://cloud.mail.ru/',
+                                    'Origin': 'https://cloud.mail.ru'
+                                }
+                                direct_api_response = self.session.get(api_download_url, timeout=30, stream=True, allow_redirects=True, headers=headers)
+                                if direct_api_response.status_code == 200:
+                                    direct_api_content = direct_api_response.content
+                                    if len(direct_api_content) > 1000 and not (direct_api_content[:2] == b'<!' or b'<html' in direct_api_content[:100].lower()):
+                                        api_logger.info(f"Successfully downloaded via direct API URL with weblink path")
+                                        return direct_api_content
+                            except Exception as e:
+                                api_logger.warning(f"Direct API download with weblink path failed: {str(e)}")
+                    
                     # Try to extract direct download link from HTML
                     soup = BeautifulSoup(content, 'html.parser')
                     
