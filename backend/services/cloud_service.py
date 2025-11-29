@@ -735,7 +735,7 @@ class CloudService:
                                                     continue  # Skip if filename doesn't match
                                         
                                         api_logger.info(f"Successfully downloaded using extracted link {i+1} (size: {len(alt_content)} bytes)")
-                            return alt_content
+                                        return alt_content
                                     else:
                                         api_logger.warning(f"Download link {i+1} returned invalid content (too small or HTML)")
                             except Exception as e:
