@@ -132,7 +132,7 @@ class CloudService:
                                                         download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={item_weblink}"
                                                     else:
                                                         # Fallback на публичную ссылку
-                                                        download_url = item_url
+                                                    download_url = item_url
                                                     files.append({
                                                         'name': item_name,
                                                         'type': 'file',
@@ -300,7 +300,7 @@ class CloudService:
                                                 download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={item_weblink}"
                                             else:
                                                 # Fallback на публичную ссылку
-                                                download_url = item_url
+                                            download_url = item_url
                                             
                                             items.append({
                                                 'name': item_name,
@@ -666,12 +666,12 @@ class CloudService:
                                     'Origin': 'https://cloud.mail.ru'
                                 }
                                 alt_response = self.session.get(download_url, timeout=30, stream=True, allow_redirects=True, headers=headers)
-                                if alt_response.status_code == 200:
-                                    alt_content = alt_response.content
-                                    # Check if it's actually a file
+                            if alt_response.status_code == 200:
+                                alt_content = alt_response.content
+                                # Check if it's actually a file
                                     if len(alt_content) > 1000 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
                                         api_logger.info(f"Successfully downloaded using API URL with full weblink path")
-                                        return alt_content
+                                    return alt_content
                                 elif alt_response.status_code == 403:
                                     api_logger.warning(f"API returned 403 for weblink, will try direct public URL")
                             except Exception as e:
@@ -845,7 +845,7 @@ class CloudService:
                                                     continue  # Skip if filename doesn't match
                                         
                                         api_logger.info(f"Successfully downloaded using extracted link {i+1} (size: {len(alt_content)} bytes)")
-                            return alt_content
+                                        return alt_content
                                     else:
                                         api_logger.warning(f"Download link {i+1} returned invalid content (too small or HTML)")
                             except Exception as e:
