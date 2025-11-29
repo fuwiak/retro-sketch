@@ -21,6 +21,5 @@ langchain-ocr-lib>=0.4.1
 # Если нужно использовать PaddleOCR, установите его отдельно: pip install paddlepaddle paddleocr
 
 # LangChain OCR Library - опциональный fallback для OCR обработки
-# Устанавливается отдельно если нужно: pip install langchain-ocr-lib
-# Или альтернативно: pip install langchain-ocr
+# Используется как последний fallback, когда все остальные методы (OpenRouter, PyPDF2, Tesseract) не сработали
 
