@@ -666,12 +666,12 @@ class CloudService:
                                     'Origin': 'https://cloud.mail.ru'
                                 }
                                 alt_response = self.session.get(download_url, timeout=30, stream=True, allow_redirects=True, headers=headers)
-                            if alt_response.status_code == 200:
-                                alt_content = alt_response.content
-                                # Check if it's actually a file
+                                if alt_response.status_code == 200:
+                                    alt_content = alt_response.content
+                                    # Check if it's actually a file
                                     if len(alt_content) > 1000 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
                                         api_logger.info(f"Successfully downloaded using API URL with full weblink path")
-                                    return alt_content
+                                        return alt_content
                                 elif alt_response.status_code == 403:
                                     api_logger.warning(f"API returned 403 for weblink, will try direct public URL")
                             except Exception as e:
