@@ -300,7 +300,7 @@ class CloudService:
                                                 download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={item_weblink}"
                                             else:
                                                 # Fallback на публичную ссылку
-                                            download_url = item_url
+                                                download_url = item_url
                                             
                                             items.append({
                                                 'name': item_name,
