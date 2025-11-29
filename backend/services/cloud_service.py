@@ -454,23 +454,26 @@ class CloudService:
                                 base_url = dispatcher_match.group(1)
                                 api_logger.info(f"Found dispatcher base URL: {base_url[:100]}")
                                 
-                                # Извлекаем путь после /public/ (weblink path)
-                                public_match = re.search(r'/public/(.+)$', url)
-                                if public_match:
-                                    weblink_path = public_match.group(1)
-                                    api_logger.info(f"Extracted weblink path: {weblink_path}")
-                                    
-                                    # Конструируем прямую ссылку на скачивание
-                                    # Формат: {base_url}/{parts[0]}/{parts[1]} или {base_url}/{full_weblink_path}
-                                    parts = weblink_path.split('/')
-                                    if len(parts) >= 2:
-                                        # Для файлов в подпапках: {base_url}/{folder}/{filename}
-                                        download_url = f"{base_url}/{parts[-2]}/{parts[-1]}"
+                                # Извлекаем путь после /public/ и конструируем прямую ссылку
+                                # Формат из примера: из URL берем последние две части и формируем {base_url}/{part1}/{part2}
+                                url_parts = url.rstrip('/').split('/')
+                                # Берем последние две части из URL (например, из /public/2RNv/faZLz1cLQ/0003/file.pdf -> ['0003', 'file.pdf'])
+                                if len(url_parts) >= 2:
+                                    # Для файлов: последние две части
+                                    download_parts = url_parts[-2:]
+                                else:
+                                    # Для папок: берем из пути после /public/
+                                    public_match = re.search(r'/public/(.+)$', url)
+                                    if public_match:
+                                        weblink_path = public_match.group(1)
+                                        download_parts = weblink_path.split('/')[-2:] if '/' in weblink_path else [weblink_path]
                                     else:
-                                        # Для файлов в корне: {base_url}/{weblink_path}
-                                        download_url = f"{base_url}/{weblink_path}"
-                                    
-                                    api_logger.info(f"Constructed direct download URL: {download_url[:150]}")
+                                        download_parts = []
+                                
+                                if download_parts and len(download_parts) >= 2:
+                                    # Конструируем прямую ссылку: {base_url}/{part1}/{part2}
+                                    download_url = f"{base_url}/{download_parts[0]}/{download_parts[1]}"
+                                    api_logger.info(f"Constructed direct download URL (method 1): {download_url[:150]}")
                                     
                                     # Пробуем скачать файл по прямой ссылке
                                     try:
@@ -489,25 +492,29 @@ class CloudService:
                                                 if not (first_bytes_direct[0:2] == b'<!' or b'<html' in direct_content[:100].lower()) and 'text/html' not in direct_content_type:
                                                     api_logger.info(f"Successfully downloaded using dispatcher direct URL")
                                                     return direct_content
-                                            
-                                            # Если не сработало, попробуем альтернативный формат
-                                            if len(parts) >= 2:
-                                                # Попробуем полный путь
-                                                alt_download_url = f"{base_url}/{weblink_path}"
-                                                api_logger.info(f"Trying alternative format: {alt_download_url[:150]}")
-                                                alt_response = self.session.get(alt_download_url, timeout=30, stream=True, allow_redirects=True, headers={
-                                                    'Referer': 'https://cloud.mail.ru/',
-                                                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                                                })
-                                                if alt_response.status_code == 200:
-                                                    alt_content = alt_response.content
-                                                    if len(alt_content) > 1000:
-                                                        first_bytes_alt = alt_content[:4]
-                                                        if not (first_bytes_alt[0:2] == b'<!' or b'<html' in alt_content[:100].lower()):
-                                                            api_logger.info(f"Successfully downloaded using alternative dispatcher URL format")
-                                                            return alt_content
                                     except Exception as e:
                                         api_logger.warning(f"Direct download from dispatcher URL failed: {str(e)}")
+                                    
+                                    # Если не сработало, попробуем полный путь
+                                    public_match = re.search(r'/public/(.+)$', url)
+                                    if public_match:
+                                        weblink_path = public_match.group(1)
+                                        alt_download_url = f"{base_url}/{weblink_path}"
+                                        api_logger.info(f"Trying alternative format (full path): {alt_download_url[:150]}")
+                                        try:
+                                            alt_response = self.session.get(alt_download_url, timeout=30, stream=True, allow_redirects=True, headers={
+                                                'Referer': 'https://cloud.mail.ru/',
+                                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                                            })
+                                            if alt_response.status_code == 200:
+                                                alt_content = alt_response.content
+                                                if len(alt_content) > 1000:
+                                                    first_bytes_alt = alt_content[:4]
+                                                    if not (first_bytes_alt[0:2] == b'<!' or b'<html' in alt_content[:100].lower()):
+                                                        api_logger.info(f"Successfully downloaded using alternative dispatcher URL format (full path)")
+                                                        return alt_content
+                                        except Exception as e:
+                                            api_logger.debug(f"Alternative dispatcher URL format failed: {str(e)}")
                             else:
                                 api_logger.debug("Dispatcher pattern not found in HTML, trying fallback methods")
                         except Exception as e:
