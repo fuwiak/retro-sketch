@@ -554,14 +554,23 @@ class CloudService:
                                     alt_content = alt_response.content
                                     # Additional check: verify file size is reasonable (not a tiny HTML page)
                                     if len(alt_content) > 1000 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
-                                        # Verify filename matches request if available
-                                        if request and hasattr(request, 'fileName'):
-                                            # Check if downloaded file matches requested filename pattern
-                                            requested_name = request.fileName.lower()
-                                            # For now, just log - we trust the filtered links
-                                            api_logger.info(f"Successfully downloaded using extracted link {i+1} (size: {len(alt_content)} bytes)")
-                                        else:
-                                            api_logger.info(f"Successfully downloaded using extracted link {i+1} (size: {len(alt_content)} bytes)")
+                                        # Skip promotional files by checking URL again
+                                        download_link_lower = download_link.lower()
+                                        if any(domain in download_link_lower for domain in ['promoimages.hb.ru-msk.vkcloud-storage.ru', 'action_mailspace']):
+                                            api_logger.warning(f"Skipping promotional file: {download_link[:100]}")
+                                            continue
+                                        
+                                        # Verify filename matches expected if provided
+                                        if expected_filename:
+                                            # Check if URL contains expected filename (basic check)
+                                            expected_name_lower = expected_filename.lower().replace(' ', '').replace('-', '').replace('_', '')
+                                            download_link_simplified = download_link.lower().replace(' ', '').replace('-', '').replace('_', '').replace('/', '')
+                                            # If it's an external URL (not Mail.ru Cloud API), check filename more strictly
+                                            if 'promoimages' in download_link_lower or 'vkcloud-storage' in download_link_lower:
+                                                api_logger.warning(f"Skipping external/promotional file: {download_link[:100]}")
+                                                continue
+                                        
+                                        api_logger.info(f"Successfully downloaded using extracted link {i+1} (size: {len(alt_content)} bytes)")
                                         return alt_content
                                     else:
                                         api_logger.warning(f"Download link {i+1} returned invalid content (too small or HTML)")

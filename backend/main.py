@@ -841,7 +841,7 @@ async def get_cloud_file(request: CloudFileRequest):
     log_api_request("POST", "/api/cloud/file", {"url": request.url, "fileName": request.fileName})
     
     try:
-        file_content = cloud_service.download_file(request.url)
+        file_content = cloud_service.download_file(request.url, expected_filename=request.fileName)
         log_api_response("POST", "/api/cloud/file", 200, 0.0)
         api_logger.info(f"File downloaded: {request.fileName} ({len(file_content)} bytes)")
         
