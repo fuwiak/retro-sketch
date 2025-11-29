@@ -131,7 +131,7 @@ class CloudService:
                                                         # Используем API endpoint с weblink для прямого скачивания
                                                         download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={item_weblink}"
                                                     else:
-                                                        download_url = item_url
+                                                    download_url = item_url
                                                     files.append({
                                                         'name': item_name,
                                                         'type': 'file',
@@ -299,7 +299,7 @@ class CloudService:
                                                 download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={item_weblink}"
                                             else:
                                                 # Fallback на публичную ссылку
-                                                download_url = item_url
+                                            download_url = item_url
                                             
                                             items.append({
                                                 'name': item_name,
@@ -502,45 +502,69 @@ class CloudService:
                                 if weblink_url not in download_links:
                                     download_links.insert(0, weblink_url)  # Priority to API links
                     
-                    # Try alternative: use /download endpoint
+                    # Try alternative: use /download endpoint for files in subfolders
                     if '/public/' in url:
-                        # Try Mail.ru Cloud download endpoint
-                        # Format: https://cloud.mail.ru/public/[hash]/[filename] -> https://cloud.mail.ru/api/v2/file/download?weblink=[hash]&key=[timestamp]
-                        match = re.search(r'/public/([^/]+)/(.+)$', url)
+                        # Extract path after /public/ to get weblink
+                        # Format: https://cloud.mail.ru/public/2RNv/faZLz1cLQ/0002/filename.pdf
+                        # weblink = 2RNv/faZLz1cLQ/0002/filename.pdf
+                        match = re.search(r'/public/(.+)$', url)
                         if match:
-                            folder_hash = match.group(1)
-                            filename = match.group(2)
+                            weblink_path = match.group(1)
                             
-                            # URL encode filename for proper handling of special characters and Cyrillic
-                            from urllib.parse import quote
-                            encoded_filename = quote(filename, safe='')
+                            # Try direct download through API with full weblink path (includes subfolders)
+                            # URL encode the weblink path for proper handling
+                            from urllib.parse import quote, unquote
                             
-                            # Try direct download endpoint with encoded filename
-                            download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={folder_hash}/{encoded_filename}"
-                            api_logger.info(f"Trying alternative download URL: {download_url}")
+                            # Try with encoded weblink
+                            encoded_weblink = quote(weblink_path, safe='/')
+                            download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={encoded_weblink}"
+                            api_logger.info(f"Trying API download URL with full weblink path: {download_url[:150]}")
                             try:
-                                alt_response = self.session.get(download_url, timeout=30, stream=True, allow_redirects=True)
-                                if alt_response.status_code == 200:
-                                    alt_content = alt_response.content
-                                    # Check if it's actually a file
-                                    if len(alt_content) > 4 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
-                                        api_logger.info(f"Successfully downloaded using alternative URL")
-                                        return alt_content
+                                headers = {
+                                    'Referer': 'https://cloud.mail.ru/',
+                                    'Origin': 'https://cloud.mail.ru'
+                                }
+                                alt_response = self.session.get(download_url, timeout=30, stream=True, allow_redirects=True, headers=headers)
+                            if alt_response.status_code == 200:
+                                alt_content = alt_response.content
+                                # Check if it's actually a file
+                                    if len(alt_content) > 1000 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
+                                        api_logger.info(f"Successfully downloaded using API URL with full weblink path")
+                                    return alt_content
+                                elif alt_response.status_code == 403:
+                                    api_logger.warning(f"API returned 403 for weblink, will try direct public URL")
                             except Exception as e:
-                                api_logger.warning(f"Alternative download URL failed: {str(e)}")
+                                api_logger.warning(f"API download URL failed: {str(e)}")
                             
-                            # Try with original filename (without encoding)
-                            download_url2 = f"https://cloud.mail.ru/api/v2/file/download?weblink={folder_hash}/{filename}"
-                            api_logger.info(f"Trying alternative download URL (original filename): {download_url2}")
+                            # Try direct public URL download (for files that are publicly accessible)
+                            api_logger.info(f"Trying direct public URL download: {url}")
                             try:
-                                alt_response2 = self.session.get(download_url2, timeout=30, stream=True, allow_redirects=True)
+                                direct_response = self.session.get(url, timeout=30, stream=True, allow_redirects=True)
+                                if direct_response.status_code == 200:
+                                    direct_content = direct_response.content
+                                    # Check if it's actually a file
+                                    if len(direct_content) > 1000 and not (direct_content[:2] == b'<!' or b'<html' in direct_content[:100].lower()):
+                                        api_logger.info(f"Successfully downloaded using direct public URL")
+                                        return direct_content
+                            except Exception as e:
+                                api_logger.warning(f"Direct public URL download failed: {str(e)}")
+                            
+                            # Try with original weblink (unencoded, but properly formatted)
+                            download_url2 = f"https://cloud.mail.ru/api/v2/file/download?weblink={weblink_path}"
+                            api_logger.info(f"Trying API download URL with original weblink: {download_url2[:150]}")
+                            try:
+                                headers = {
+                                    'Referer': 'https://cloud.mail.ru/',
+                                    'Origin': 'https://cloud.mail.ru'
+                                }
+                                alt_response2 = self.session.get(download_url2, timeout=30, stream=True, allow_redirects=True, headers=headers)
                                 if alt_response2.status_code == 200:
                                     alt_content2 = alt_response2.content
-                                    if len(alt_content2) > 4 and not (alt_content2[:2] == b'<!' or b'<html' in alt_content2[:100].lower()):
-                                        api_logger.info(f"Successfully downloaded using alternative URL (original filename)")
+                                    if len(alt_content2) > 1000 and not (alt_content2[:2] == b'<!' or b'<html' in alt_content2[:100].lower()):
+                                        api_logger.info(f"Successfully downloaded using API URL with original weblink")
                                         return alt_content2
                             except Exception as e:
-                                api_logger.warning(f"Alternative download URL (original) failed: {str(e)}")
+                                api_logger.warning(f"API download URL (original weblink) failed: {str(e)}")
                     
                     # If we found download links, filter out promotional ones and try them
                     promotional_domains = [
@@ -601,14 +625,28 @@ class CloudService:
                                 api_logger.info(f"Trying download link {i+1}/{min(len(filtered_links), 5)}: {download_link[:100]}...")
                                 alt_response = self.session.get(download_link, timeout=30, stream=True, allow_redirects=True)
                                 if alt_response.status_code == 200:
-                                    alt_content = alt_response.content
+                        alt_content = alt_response.content
                                     # Additional check: verify file size is reasonable (not a tiny HTML page)
                                     if len(alt_content) > 1000 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
-                                        # STRICT: Only allow Mail.ru Cloud links
+                                        # Check link type - prefer Mail.ru Cloud, but allow external if matches filename
                                         download_link_lower = download_link.lower()
+                                        
+                                        # Filter external links more carefully
                                         if 'cloud.mail.ru' not in download_link_lower:
-                                            api_logger.warning(f"Skipping external link (not Mail.ru Cloud): {download_link[:100]}")
-                                            continue
+                                            # External link - check if it's promotional or matches expected filename
+                                            if any(domain in download_link_lower for domain in ['r.mradx.net', 'imgs2.imgsmail.ru', 'promoimages']):
+                                                api_logger.warning(f"Skipping promotional external link: {download_link[:100]}")
+                                                continue
+                                            # If expected filename provided, check if it matches
+                                            if expected_filename:
+                                                expected_name_base = expected_filename.lower().split('.')[0][:10]
+                                                if expected_name_base not in download_link_lower.replace('%', '').replace('-', '_'):
+                                                    api_logger.warning(f"Skipping external link (filename mismatch): {download_link[:100]}")
+                                                    continue
+                                            else:
+                                                # No expected filename - skip external links
+                                                api_logger.warning(f"Skipping external link (no filename check): {download_link[:100]}")
+                                                continue
                                         
                                         # Skip promotional files by checking URL again
                                         promotional_check_domains = [
@@ -666,7 +704,7 @@ class CloudService:
                                                     continue  # Skip if filename doesn't match
                                         
                                         api_logger.info(f"Successfully downloaded using extracted link {i+1} (size: {len(alt_content)} bytes)")
-                                        return alt_content
+                            return alt_content
                                     else:
                                         api_logger.warning(f"Download link {i+1} returned invalid content (too small or HTML)")
                             except Exception as e:
