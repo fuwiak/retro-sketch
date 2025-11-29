@@ -2158,13 +2158,23 @@ function renderCloudFolder(data) {
                   
                   if (data.items && data.items.length > 0) {
                     data.items.forEach(item => {
-                      const icon = item.type === 'folder' ? '📁' : 
-                        (item.name.match(/\.(pdf|png|jpg|jpeg)$/i) ? 
-                          (item.name.match(/\.pdf$/i) ? '📄' : '🖼️') : '📄');
-                      const itemClass = item.type === 'folder' ? 'cloud-folder-expandable' : 'cloud-file-item';
-                      filesHtml += `<div class="${itemClass}" data-${item.type === 'folder' ? 'folder' : ''}url="${item.url || item.download_url}" data-${item.type === 'folder' ? 'folder' : ''}name="${item.name}" style="padding: 5px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,0,0,0.1)'" onmouseout="this.style.background='transparent'">
+                      if (item.type === 'folder') {
+                        // Render folder with expandable structure
+                        filesHtml += `<div class="cloud-folder-expandable" style="padding: 5px; cursor: pointer;" data-folder-url="${item.url || item.download_url}" data-folder-name="${item.name}">
+                          <span>📁 ${item.name}</span>
+                          <span class="folder-expand" style="float: right; opacity: 0.5;">▶</span>
+                          <div class="folder-files" style="display: none; margin-left: 20px; padding-left: 10px; border-left: 2px solid var(--ui-color);">
+                            <div style="padding: 5px; opacity: 0.7;">⏳ Loading files...</div>
+                          </div>
+                        </div>`;
+                      } else {
+                        // Render file
+                        const icon = item.name.match(/\.(pdf|png|jpg|jpeg)$/i) ? 
+                          (item.name.match(/\.pdf$/i) ? '📄' : '🖼️') : '📄';
+                        filesHtml += `<div class="cloud-file-item" data-url="${item.url || item.download_url}" data-name="${item.name}" style="padding: 5px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,0,0,0.1)'" onmouseout="this.style.background='transparent'">
                         ${icon} ${item.name}
                       </div>`;
+                      }
   });
 } else {
                     filesHtml = '<div style="padding: 5px; opacity: 0.7;">No files</div>';
