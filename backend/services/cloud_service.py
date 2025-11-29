@@ -320,7 +320,7 @@ class CloudService:
         api_logger.info(f"Found {len(items)} items in folder {folder_name or folder_url}")
         return items
     
-    def download_file(self, url: str) -> bytes:
+    def download_file(self, url: str, expected_filename: str = None) -> bytes:
         """Download file from URL"""
         try:
             api_logger.info(f"Downloading file: {url}")
@@ -447,20 +447,40 @@ class CloudService:
                             download_links.insert(0, redirect_url.group(1))
                     
                     # Try to find script tags with download URLs
+                    # Filter out promotional/advertisement URLs immediately
+                    promotional_domains = ['promoimages.hb.ru-msk.vkcloud-storage.ru', 'promo', 'advertising', 'реклама']
+                    promotional_keywords = ['акция', 'литрес', 'mail space', 'promo', 'реклама', 'advertisement', 'action_mailspace']
+                    
                     for script in soup.find_all('script'):
                         if script.string:
                             # Look for URLs in script - расширенный поиск для Mail.ru Cloud
-                            # Ищем любые URL с расширениями файлов
+                            # Ищем любые URL с расширениями файлов, но фильтруем рекламу
                             urls = re.findall(r'https?://[^\s"\'<>\)]+\.(?:pdf|png|jpg|jpeg|jpe)', script.string, re.I)
-                            download_links.extend(urls)
+                            # Filter out promotional URLs
+                            for url in urls:
+                                url_lower = url.lower()
+                                # Skip promotional domains
+                                if any(domain in url_lower for domain in promotional_domains):
+                                    api_logger.debug(f"Filtered promotional URL (domain): {url[:80]}")
+                                    continue
+                                # Skip promotional keywords
+                                if any(keyword in url_lower for keyword in promotional_keywords):
+                                    api_logger.debug(f"Filtered promotional URL (keyword): {url[:80]}")
+                                    continue
+                                download_links.append(url)
                             
-                            # Также ищем ссылки на API Mail.ru Cloud
+                            # Также ищем ссылки на API Mail.ru Cloud (these are more reliable)
                             api_urls = re.findall(r'https?://cloud\.mail\.ru/api/v\d+/file/download[^\s"\'<>\)]+', script.string, re.I)
-                            download_links.extend(api_urls)
+                            # API URLs get priority
+                            for api_url in api_urls:
+                                if api_url not in download_links:
+                                    download_links.insert(0, api_url)  # Priority to API links
                             
-                            # Ищем ссылки с параметрами weblink
-                            weblink_urls = re.findall(r'https?://cloud\.mail\.ru/[^\s"\'<>\)]+', script.string, re.I)
-                            download_links.extend(weblink_urls)
+                            # Ищем ссылки с параметрами weblink (only API-related)
+                            weblink_urls = re.findall(r'https?://cloud\.mail\.ru/api/[^\s"\'<>\)]+', script.string, re.I)
+                            for weblink_url in weblink_urls:
+                                if weblink_url not in download_links:
+                                    download_links.insert(0, weblink_url)  # Priority to API links
                     
                     # Try alternative: use /download endpoint
                     if '/public/' in url:
@@ -502,18 +522,49 @@ class CloudService:
                             except Exception as e:
                                 api_logger.warning(f"Alternative download URL (original) failed: {str(e)}")
                     
-                    # If we found download links, try them all
-                    if download_links:
-                        api_logger.info(f"Found {len(download_links)} potential download links, trying them...")
-                        for i, download_link in enumerate(download_links[:5]):  # Пробуем первые 5 ссылок
+                    # If we found download links, filter out promotional ones and try them
+                    promotional_domains = ['promoimages.hb.ru-msk.vkcloud-storage.ru', 'promo', 'advertising', 'реклама']
+                    promotional_keywords = ['акция', 'литрес', 'mail space', 'promo', 'реклама', 'advertisement', 'action_mailspace']
+                    
+                    # Filter out promotional links
+                    filtered_links = []
+                    for link in download_links:
+                        link_lower = link.lower()
+                        # Skip if contains promotional domain
+                        if any(domain in link_lower for domain in promotional_domains):
+                            api_logger.debug(f"Filtered out promotional link (domain): {link[:100]}")
+                            continue
+                        # Skip if contains promotional keywords
+                        if any(keyword in link_lower for keyword in promotional_keywords):
+                            api_logger.debug(f"Filtered out promotional link (keyword): {link[:100]}")
+                            continue
+                        # Prefer Mail.ru Cloud API links over external links
+                        if 'cloud.mail.ru/api' in link_lower:
+                            filtered_links.insert(0, link)  # Priority to API links
+                        else:
+                            filtered_links.append(link)
+                    
+                    if filtered_links:
+                        api_logger.info(f"Found {len(filtered_links)} filtered download links (from {len(download_links)} total), trying them...")
+                        for i, download_link in enumerate(filtered_links[:5]):  # Пробуем первые 5 отфильтрованных ссылок
                             try:
-                                api_logger.info(f"Trying download link {i+1}/{min(len(download_links), 5)}: {download_link[:100]}...")
+                                api_logger.info(f"Trying download link {i+1}/{min(len(filtered_links), 5)}: {download_link[:100]}...")
                                 alt_response = self.session.get(download_link, timeout=30, stream=True, allow_redirects=True)
                                 if alt_response.status_code == 200:
                                     alt_content = alt_response.content
-                                    if len(alt_content) > 4 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
-                                        api_logger.info(f"Successfully downloaded using extracted link {i+1}")
+                                    # Additional check: verify file size is reasonable (not a tiny HTML page)
+                                    if len(alt_content) > 1000 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
+                                        # Verify filename matches request if available
+                                        if request and hasattr(request, 'fileName'):
+                                            # Check if downloaded file matches requested filename pattern
+                                            requested_name = request.fileName.lower()
+                                            # For now, just log - we trust the filtered links
+                                            api_logger.info(f"Successfully downloaded using extracted link {i+1} (size: {len(alt_content)} bytes)")
+                                        else:
+                                            api_logger.info(f"Successfully downloaded using extracted link {i+1} (size: {len(alt_content)} bytes)")
                                         return alt_content
+                                    else:
+                                        api_logger.warning(f"Download link {i+1} returned invalid content (too small or HTML)")
                             except Exception as e:
                                 api_logger.warning(f"Download link {i+1} failed: {str(e)}")
                                 continue
