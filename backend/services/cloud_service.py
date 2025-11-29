@@ -424,8 +424,13 @@ class CloudService:
                     download_links = []
                     
                     # Try to find direct download links
+                    # Filter out promotional/advertisement links
+                    promotional_keywords = ['акция', 'литрес', 'mail space', 'promo', 'реклама', 'advertisement']
                     for link in soup.find_all('a', href=True):
                         href = link.get('href', '')
+                        # Skip promotional links
+                        if any(keyword in href.lower() for keyword in promotional_keywords):
+                            continue
                         if href and ('download' in href.lower() or href.endswith('.pdf') or href.endswith('.png') or href.endswith('.jpg')):
                             if href.startswith('http'):
                                 download_links.append(href)
