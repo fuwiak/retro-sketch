@@ -301,15 +301,16 @@ class CloudService:
                                             else:
                                                 # Fallback на публичную ссылку
                                                 download_url = item_url
-                                                
-                                                items.append({
-                                                    'name': item_name,
-                                                    'type': 'file',
-                                                    'path': folder_name,
-                                                    'url': download_url,
-                                                    'download_url': download_url,
-                                                    'weblink': item_weblink  # Сохраняем weblink для использования
-                                                })
+                                            
+                                            # ВАЖНО: Добавляем файл в список в любом случае (с weblink или без)
+                                            items.append({
+                                                'name': item_name,
+                                                'type': 'file',
+                                                'path': folder_name,
+                                                'url': download_url,
+                                                'download_url': download_url,
+                                                'weblink': item_weblink  # Сохраняем weblink для использования
+                                            })
                                 break
                             except Exception as e:
                                 api_logger.debug(f"Error parsing folder JSON: {str(e)}")
