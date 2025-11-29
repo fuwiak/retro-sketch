@@ -1263,7 +1263,7 @@ OCR текст:
                 
         except Exception as e:
             api_logger.error(f"Error extracting structured data: {e}")
-            return None
+        return None
     
     def _apply_technical_glossary(self, text: str) -> str:
         """Apply technical glossary for better translation"""

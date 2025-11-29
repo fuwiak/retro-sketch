@@ -407,34 +407,34 @@ class OCRService:
             ocr_logger.error(f"   Tesseract доступен: {self.tesseract_available}")
             ocr_logger.error(f"   PDF2Image доступен: {self.pdf2image_available}")
             raise Exception("OCR processing failed: все методы (OpenRouter, PyPDF2, Tesseract) не смогли извлечь текст")
-        
-        ocr_logger.info(
-            f"OCR completed - Method: {processing_info['method']}, "
-            f"Time: {actual_time:.2f}s, "
-            f"Text length: {len(ocr_text)} chars, "
-            f"Pages: {pages}"
-        )
-        
-        # Log success
-        log_ocr_result(
-            method=processing_info["method"],
-            success=True,
-            time_taken=actual_time,
-            pages=pages
-        )
-        
-        return {
-            "text": ocr_text,
-            "file_type": "image" if is_image else "pdf",
-            "pages": pages,
-            "metadata": {
-                "languages": languages,
-                "file_type": file_type,
+            
+            ocr_logger.info(
+                f"OCR completed - Method: {processing_info['method']}, "
+                f"Time: {actual_time:.2f}s, "
+                f"Text length: {len(ocr_text)} chars, "
+                f"Pages: {pages}"
+            )
+            
+            # Log success
+            log_ocr_result(
+                method=processing_info["method"],
+                success=True,
+                time_taken=actual_time,
+                pages=pages
+            )
+            
+            return {
+                "text": ocr_text,
+                "file_type": "image" if is_image else "pdf",
+                "pages": pages,
+                "metadata": {
+                    "languages": languages,
+                    "file_type": file_type,
                 "method_used": processing_info["method"],
                 "text_type": text_type.value if text_type else "unknown"
-            },
-            "processing_info": processing_info
-        }
+                },
+                "processing_info": processing_info
+            }
     
     async def process_image(
         self,
