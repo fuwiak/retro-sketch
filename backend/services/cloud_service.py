@@ -238,83 +238,140 @@ class CloudService:
         """
         Fetch files from a subfolder - LAZY: called on demand
         Returns list of files (and subfolders) from this folder only
+        Uses same approach as parse_mailru_folder_structure but for subfolders
         """
         items = []
         try:
             api_logger.info(f"Fetching files from folder: {folder_url}")
-            response = self.session.get(folder_url, timeout=10)
-            response.raise_for_status()
             
-            soup = BeautifulSoup(response.text, 'html.parser')
-            scripts = soup.find_all('script')
+            # Extract weblink from folder URL if possible
+            # Format: https://cloud.mail.ru/public/2RNv/faZLz1cLQ/0001
+            folder_weblink = None
+            match = re.search(r'/public/(.+)$', folder_url)
+            if match:
+                folder_weblink = match.group(1)
             
-            for script in scripts:
-                if script.string and 'list' in script.string.lower():
-                    script_content = script.string
-                    start_idx = script_content.find('"list"')
-                    if start_idx != -1:
-                        array_start = script_content.find('[', start_idx)
-                        if array_start != -1:
-                            bracket_count = 1
-                            array_end = array_start + 1
-                            for i in range(array_start + 1, len(script_content)):
-                                if script_content[i] == '[':
-                                    bracket_count += 1
-                                elif script_content[i] == ']':
-                                    bracket_count -= 1
-                                    if bracket_count == 0:
-                                        array_end = i + 1
-                                        break
+            # Approach 1: Try API endpoint first (more reliable)
+            if folder_weblink:
+                api_endpoints = [
+                    f"https://cloud.mail.ru/api/v2/folder?weblink={folder_weblink}",
+                ]
+                
+                for api_url in api_endpoints:
+                    try:
+                        api_response = self.session.get(api_url, timeout=10, headers={
+                            'Referer': 'https://cloud.mail.ru/',
+                            'Origin': 'https://cloud.mail.ru'
+                        })
+                        if api_response.status_code == 200:
+                            data = api_response.json()
+                            # Try different response structures
+                            if 'body' in data:
+                                if 'list' in data['body']:
+                                    parsed_items = self._parse_api_files(data['body']['list'], folder_url)
+                                    if parsed_items:
+                                        items.extend(parsed_items)
+                                        api_logger.info(f"Found {len(parsed_items)} items via API endpoint")
+                                elif 'items' in data['body']:
+                                    parsed_items = self._parse_api_files(data['body']['items'], folder_url)
+                                    if parsed_items:
+                                        items.extend(parsed_items)
+                                        api_logger.info(f"Found {len(parsed_items)} items via API endpoint")
+                            elif 'list' in data:
+                                parsed_items = self._parse_api_files(data['list'], folder_url)
+                                if parsed_items:
+                                    items.extend(parsed_items)
+                                    api_logger.info(f"Found {len(parsed_items)} items via API endpoint")
+                            elif 'items' in data:
+                                parsed_items = self._parse_api_files(data['items'], folder_url)
+                                if parsed_items:
+                                    items.extend(parsed_items)
+                                    api_logger.info(f"Found {len(parsed_items)} items via API endpoint")
                             
-                            try:
-                                import json
-                                array_str = script_content[array_start:array_end]
-                                list_data = json.loads(array_str)
-                                
-                                for item in list_data:
-                                    if isinstance(item, dict):
-                                        item_type = item.get('type') or item.get('kind', '')
-                                        item_name = item.get('name', '')
-                                        item_weblink = item.get('weblink', '')
-                                        
-                                        # Build URL
-                                        if item_weblink:
-                                            item_url = f"https://cloud.mail.ru/public/{item_weblink}"
-                                        else:
-                                            item_url = f"{folder_url}/{item_name}"
-                                        
-                                        # Add folder or file
-                                        if item_type == 'folder':
-                                            items.append({
-                                                'name': item_name,
-                                                'type': 'folder',
-                                                'path': folder_name,
-                                                'url': item_url,
-                                                'download_url': item_url
-                                            })
-                                        elif item_type == 'file' or (item_type != 'folder' and item_name):
-                                            # Для файлов используем weblink для прямого скачивания
-                                            # Mail.ru Cloud использует формат: https://cloud.mail.ru/api/v2/file/download?weblink={weblink}
-                                            if item_weblink:
-                                                # Используем weblink напрямую - это хеш файла для API
-                                                download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={item_weblink}"
-                                            else:
-                                                # Fallback на публичную ссылку
-                                                download_url = item_url
-                                            
-                                            # ВАЖНО: Добавляем файл в список в любом случае (с weblink или без)
-                                            items.append({
-                                                'name': item_name,
-                                                'type': 'file',
-                                                'path': folder_name,
-                                                'url': download_url,
-                                                'download_url': download_url,
-                                                'weblink': item_weblink  # Сохраняем weblink для использования
-                                            })
+                            if items:
                                 break
-                            except Exception as e:
-                                api_logger.debug(f"Error parsing folder JSON: {str(e)}")
-                                pass
+                    except Exception as e:
+                        api_logger.debug(f"API endpoint {api_url} failed: {str(e)}")
+                        continue
+            
+            # Approach 2: Parse HTML page if API didn't work
+            if not items:
+                response = self.session.get(folder_url, timeout=10)
+                response.raise_for_status()
+                
+                soup = BeautifulSoup(response.text, 'html.parser')
+                scripts = soup.find_all('script')
+                
+                for script in scripts:
+                    if script.string and 'list' in script.string.lower():
+                        script_content = script.string
+                        start_idx = script_content.find('"list"')
+                        if start_idx != -1:
+                            array_start = script_content.find('[', start_idx)
+                            if array_start != -1:
+                                bracket_count = 1
+                                array_end = array_start + 1
+                                for i in range(array_start + 1, len(script_content)):
+                                    if script_content[i] == '[':
+                                        bracket_count += 1
+                                    elif script_content[i] == ']':
+                                        bracket_count -= 1
+                                        if bracket_count == 0:
+                                            array_end = i + 1
+                                            break
+                                
+                                try:
+                                    import json
+                                    array_str = script_content[array_start:array_end]
+                                    list_data = json.loads(array_str)
+                                    
+                                    for item in list_data:
+                                        if isinstance(item, dict):
+                                            item_type = item.get('type') or item.get('kind', '')
+                                            item_name = item.get('name', '')
+                                            item_weblink = item.get('weblink', '')
+                                            
+                                            # Build URL
+                                            if item_weblink:
+                                                item_url = f"https://cloud.mail.ru/public/{item_weblink}"
+                                            else:
+                                                item_url = f"{folder_url}/{item_name}"
+                                            
+                                            # Add folder or file
+                                            if item_type == 'folder':
+                                                items.append({
+                                                    'name': item_name,
+                                                    'type': 'folder',
+                                                    'path': folder_name,
+                                                    'url': item_url,
+                                                    'download_url': item_url
+                                                })
+                                            elif item_type == 'file' or (item_type != 'folder' and item_name):
+                                                # Для файлов используем weblink для прямого скачивания
+                                                # Mail.ru Cloud использует формат: https://cloud.mail.ru/api/v2/file/download?weblink={weblink}
+                                                if item_weblink:
+                                                    # Используем weblink напрямую - это хеш файла для API
+                                                    download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={item_weblink}"
+                                                else:
+                                                    # Fallback на публичную ссылку
+                                                    download_url = item_url
+                                                
+                                                # ВАЖНО: Добавляем файл в список в любом случае (с weblink или без)
+                                                items.append({
+                                                    'name': item_name,
+                                                    'type': 'file',
+                                                    'path': folder_name,
+                                                    'url': download_url,
+                                                    'download_url': download_url,
+                                                    'weblink': item_weblink  # Сохраняем weblink для использования
+                                                })
+                                    if items:
+                                        api_logger.info(f"Found {len(items)} items via HTML parsing")
+                                        break
+                                except Exception as e:
+                                    api_logger.debug(f"Error parsing folder JSON: {str(e)}")
+                                    pass
+        
         except Exception as e:
             api_logger.error(f"Error fetching folder files: {str(e)}")
             raise
