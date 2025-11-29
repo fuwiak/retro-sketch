@@ -344,10 +344,15 @@ class OCRService:
             try:
                 ocr_logger.info("🔧 Используем Tesseract OCR...")
                 ocr_text = await self._process_with_tesseract(file_content, file_type, languages)
-                if ocr_text:
+                if ocr_text and len(ocr_text.strip()) > 0:
+                    processing_info["method"] = "tesseract"
                     ocr_logger.info(f"✅ Tesseract извлек текст: {len(ocr_text)} символов")
+                else:
+                    ocr_logger.warning(f"⚠️ Tesseract вернул пустой результат: type={type(ocr_text)}, length={len(ocr_text) if ocr_text else 0}")
+                    ocr_text = None
             except Exception as e:
                 ocr_logger.error(f"❌ Tesseract не сработал: {e}")
+                ocr_text = None
         
         # Для изображений: если локальный метод не сработал, пробуем OpenRouter как fallback
         if is_image and (not ocr_text or len(ocr_text.strip()) <= 10):
@@ -488,16 +493,11 @@ class OCRService:
         actual_time = time.time() - start_time
         processing_info["actual_time"] = actual_time
         
-        if not ocr_text or len(ocr_text.strip()) == 0:
-            ocr_logger.error("❌ Все методы не смогли извлечь текст!")
-            ocr_logger.error(f"   Метод: {selected_method.value}, Тип PDF: {pdf_type.value if pdf_type else 'unknown'}")
-            ocr_logger.error(f"   OpenRouter доступен: {self.openrouter_service and self.openrouter_service.is_available()}")
-            ocr_logger.error(f"   Tesseract доступен: {self.tesseract_available}")
-            ocr_logger.error(f"   PDF2Image доступен: {self.pdf2image_available}")
-            raise Exception("OCR processing failed: все методы (OpenRouter, PyPDF2, Tesseract с адаптивными параметрами) не смогли извлечь текст")
-            
+        # Проверяем, что текст был успешно извлечен
+        if ocr_text and len(ocr_text.strip()) > 0:
+            # Успешный результат - логируем и возвращаем
             ocr_logger.info(
-                f"OCR completed - Method: {processing_info['method']}, "
+                f"OCR completed - Method: {processing_info.get('method', 'unknown')}, "
                 f"Time: {actual_time:.2f}s, "
                 f"Text length: {len(ocr_text)} chars, "
                 f"Pages: {pages}"
@@ -505,7 +505,7 @@ class OCRService:
             
             # Log success
             log_ocr_result(
-                method=processing_info["method"],
+                method=processing_info.get("method", "unknown"),
                 success=True,
                 time_taken=actual_time,
                 pages=pages
@@ -518,11 +518,20 @@ class OCRService:
                 "metadata": {
                     "languages": languages,
                     "file_type": file_type,
-                "method_used": processing_info["method"],
-                "text_type": text_type.value if text_type else "unknown"
+                    "method_used": processing_info.get("method", "unknown"),
+                    "text_type": text_type.value if text_type else "unknown"
                 },
                 "processing_info": processing_info
             }
+        else:
+            # Неудачный результат - логируем ошибку и выбрасываем исключение
+            ocr_logger.error("❌ Все методы не смогли извлечь текст!")
+            ocr_logger.error(f"   Метод: {selected_method.value}, Тип PDF: {pdf_type.value if pdf_type else 'unknown'}")
+            ocr_logger.error(f"   OpenRouter доступен: {self.openrouter_service and self.openrouter_service.is_available()}")
+            ocr_logger.error(f"   Tesseract доступен: {self.tesseract_available}")
+            ocr_logger.error(f"   PDF2Image доступен: {self.pdf2image_available}")
+            ocr_logger.error(f"   ocr_text type: {type(ocr_text)}, length: {len(ocr_text) if ocr_text else 0}")
+            raise Exception("OCR processing failed: все методы (OpenRouter, PyPDF2, Tesseract с адаптивными параметрами) не смогли извлечь текст")
     
     async def process_image(
         self,
