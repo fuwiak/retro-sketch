@@ -299,6 +299,19 @@ class OCRService:
                 except Exception as e:
                     ocr_logger.warning(f"⚠️ OpenRouter не сработал для изображения: {e}")
         
+        # Для TESSERACT метода - обрабатываем напрямую без OpenRouter (быстро)
+        if not ocr_text and selected_method == OCRMethod.TESSERACT:
+            if self.tesseract_available:
+                try:
+                    ocr_logger.info("⚡ Используем Tesseract OCR напрямую (быстро)...")
+                    ocr_text = await self._process_with_tesseract(file_content, file_type, languages)
+                    if ocr_text and len(ocr_text.strip()) > 0:
+                        processing_info["method"] = "tesseract"
+                        ocr_logger.info(f"✅ Tesseract успешно извлек текст: {len(ocr_text)} символов")
+                except Exception as e:
+                    ocr_logger.warning(f"⚠️ Tesseract не сработал: {e}, пробуем другие методы...")
+                    ocr_text = None
+        
         # Для OpenRouter методов (только для PDF или если явно выбран OpenRouter)
         if not ocr_text and not is_image and selected_method in [OCRMethod.OPENROUTER_OLMOCR, OCRMethod.OPENROUTER_GOTOCR, OCRMethod.OPENROUTER_MISTRAL, OCRMethod.OPENROUTER_AUTO]:
             # ШАГ 1: Пробуем OpenRouter (если доступен)

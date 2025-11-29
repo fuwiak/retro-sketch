@@ -106,9 +106,9 @@ class OCRSelectionAgent:
                             if page_text and len(page_text.strip()) > 50:  # Минимум 50 символов
                                 total_text_length += len(page_text)
                                 pages_with_text += 1
-                        except:
-                            pass
-                    
+        except:
+            pass
+        
                     total_pages = len(pdf_reader.pages)
                     
                     if total_pages == 0:
@@ -278,15 +278,19 @@ class OCRSelectionAgent:
                     return OCRMethod.OPENROUTER_AUTO
             
             else:  # balanced
-                # Сбалансированный - пробуем OpenRouter, затем локальные
-                if self.openrouter_service and self.openrouter_service.is_available():
-                    ocr_logger.info("🎯 Выбран метод: OPENROUTER_AUTO (raster PDF, balanced)")
-                    return OCRMethod.OPENROUTER_AUTO
+                # Сбалансированный - СНАЧАЛА пробуем быстрые локальные методы, затем OpenRouter если нужно
+                # Это намного быстрее для пользователя
+                if self.tesseract_available:
+                    ocr_logger.info("🎯 Выбран метод: TESSERACT (raster PDF, balanced, быстрый старт)")
+                    return OCRMethod.TESSERACT
                 elif self.paddleocr_available:
-                    ocr_logger.info("🎯 Выбран метод: PADDLEOCR (raster PDF, balanced, OpenRouter недоступен)")
+                    ocr_logger.info("🎯 Выбран метод: PADDLEOCR (raster PDF, balanced, быстрый старт)")
                     return OCRMethod.PADDLEOCR
+                elif self.openrouter_service and self.openrouter_service.is_available():
+                    ocr_logger.info("🎯 Выбран метод: OPENROUTER_AUTO (raster PDF, balanced, fallback)")
+                    return OCRMethod.OPENROUTER_AUTO
                 else:
-                    ocr_logger.info("🎯 Выбран метод: TESSERACT (raster PDF, balanced, fallback)")
+                    ocr_logger.info("🎯 Выбран метод: TESSERACT (raster PDF, balanced, единственный доступный)")
                     return OCRMethod.TESSERACT
         
         else:  # MIXED или UNKNOWN
