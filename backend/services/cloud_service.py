@@ -566,10 +566,16 @@ class CloudService:
                         'static/cloud'
                     ]
                     
-                    # Filter out promotional links
+                    # Filter out promotional links - STRICT: only Mail.ru Cloud links
                     filtered_links = []
                     for link in download_links:
                         link_lower = link.lower()
+                        
+                        # STRICT: Only allow Mail.ru Cloud links
+                        if 'cloud.mail.ru' not in link_lower:
+                            api_logger.debug(f"Filtered out external link (not Mail.ru Cloud): {link[:100]}")
+                            continue
+                        
                         # Skip if contains promotional domain
                         if any(domain in link_lower for domain in promotional_domains):
                             api_logger.debug(f"Filtered out promotional link (domain): {link[:100]}")
@@ -578,11 +584,11 @@ class CloudService:
                         if any(keyword in link_lower for keyword in promotional_keywords):
                             api_logger.debug(f"Filtered out promotional link (keyword): {link[:100]}")
                             continue
-                        # Prefer Mail.ru Cloud API links over external links
+                        # Prefer Mail.ru Cloud API links over public links
                         if 'cloud.mail.ru/api' in link_lower:
                             filtered_links.insert(0, link)  # Priority to API links
-                        else:
-                            filtered_links.append(link)
+                        elif 'cloud.mail.ru/public' in link_lower:
+                            filtered_links.append(link)  # Public links as fallback
                     
                     if filtered_links:
                         api_logger.info(f"Found {len(filtered_links)} filtered download links (from {len(download_links)} total), trying them...")
@@ -594,21 +600,47 @@ class CloudService:
                                     alt_content = alt_response.content
                                     # Additional check: verify file size is reasonable (not a tiny HTML page)
                                     if len(alt_content) > 1000 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
-                                        # Skip promotional files by checking URL again
+                                        # STRICT: Only allow Mail.ru Cloud links
                                         download_link_lower = download_link.lower()
-                                        if any(domain in download_link_lower for domain in ['promoimages.hb.ru-msk.vkcloud-storage.ru', 'action_mailspace']):
-                                            api_logger.warning(f"Skipping promotional file: {download_link[:100]}")
+                                        if 'cloud.mail.ru' not in download_link_lower:
+                                            api_logger.warning(f"Skipping external link (not Mail.ru Cloud): {download_link[:100]}")
+                                            continue
+                                        
+                                        # Skip promotional files by checking URL again
+                                        promotional_check_domains = [
+                                            'promoimages.hb.ru-msk.vkcloud-storage.ru',
+                                            'vkcloud-storage.ru',
+                                            'imgs2.imgsmail.ru',
+                                            'imgsmail.ru',
+                                            'nestle'
+                                        ]
+                                        promotional_check_keywords = [
+                                            'action_mailspace',
+                                            'pet-34',
+                                            'static/cloud',
+                                            'desktop'
+                                        ]
+                                        
+                                        if any(domain in download_link_lower for domain in promotional_check_domains):
+                                            api_logger.warning(f"Skipping promotional file (domain): {download_link[:100]}")
+                                            continue
+                                        
+                                        if any(keyword in download_link_lower for keyword in promotional_check_keywords):
+                                            api_logger.warning(f"Skipping promotional file (keyword): {download_link[:100]}")
                                             continue
                                         
                                         # Verify filename matches expected if provided
                                         if expected_filename:
-                                            # Check if URL contains expected filename (basic check)
-                                            expected_name_lower = expected_filename.lower().replace(' ', '').replace('-', '').replace('_', '')
-                                            download_link_simplified = download_link.lower().replace(' ', '').replace('-', '').replace('_', '').replace('/', '')
-                                            # If it's an external URL (not Mail.ru Cloud API), check filename more strictly
-                                            if 'promoimages' in download_link_lower or 'vkcloud-storage' in download_link_lower:
-                                                api_logger.warning(f"Skipping external/promotional file: {download_link[:100]}")
-                                                continue
+                                            # Extract base name from expected filename
+                                            expected_name_base = expected_filename.lower().split('.')[0].replace(' ', '').replace('-', '').replace('_', '').replace('/', '')
+                                            # Decode URL to check filename
+                                            from urllib.parse import unquote
+                                            decoded_url = unquote(download_link_lower)
+                                            # Check if expected filename is in the URL
+                                            if expected_name_base and len(expected_name_base) > 3:
+                                                if expected_name_base[:5] not in decoded_url.replace('%', '').replace('-', '').replace('_', '').replace(' ', ''):
+                                                    api_logger.warning(f"Filename mismatch: expected '{expected_name_base[:10]}', URL: {download_link[:100]}")
+                                                    continue  # Skip if filename doesn't match
                                         
                                         api_logger.info(f"Successfully downloaded using extracted link {i+1} (size: {len(alt_content)} bytes)")
                                         return alt_content
