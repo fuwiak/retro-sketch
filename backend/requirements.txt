@@ -14,12 +14,8 @@ pdf2image==1.16.3
 numpy==1.26.3
 beautifulsoup4==4.12.2
 requests==2.31.0
-langchain-ocr-lib
 # paddlepaddle и paddleocr опциональны - убраны из-за проблем с OpenCV (libGL.so.1) в Docker
 # PaddleOCR автоматически устанавливает OpenCV, что вызывает ошибки в контейнере
 # OCR работает отлично без них, используя OpenRouter и Tesseract
 # Если нужно использовать PaddleOCR, установите его отдельно: pip install paddlepaddle paddleocr
-
-# LangChain OCR Library - опциональный fallback для OCR обработки
-# Используется как последний fallback, когда все остальные методы (OpenRouter, PyPDF2, Tesseract) не сработали
 

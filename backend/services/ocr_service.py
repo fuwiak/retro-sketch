@@ -28,13 +28,6 @@ try:
 except ImportError:
     PDF2IMAGE_AVAILABLE = False
 
-# LangChain OCR Library (optional fallback)
-try:
-    from langchain_ocr_lib import OCRChain
-    LANGCHAIN_OCR_AVAILABLE = True
-except ImportError:
-    LANGCHAIN_OCR_AVAILABLE = False
-
 from services.logger import ocr_logger, log_ocr_request, log_ocr_result
 from services.ocr_agent import OCRSelectionAgent, PDFType, OCRMethod, OCRQuality, TextType
 
@@ -49,7 +42,6 @@ class OCRService:
         self.openrouter_service = openrouter_service  # Будет передан из main.py
         self.tesseract_available = TESSERACT_AVAILABLE
         self.pdf2image_available = PDF2IMAGE_AVAILABLE
-        self.langchain_ocr_available = LANGCHAIN_OCR_AVAILABLE
         self.agent = OCRSelectionAgent(openrouter_service=openrouter_service)  # AI агент для выбора метода
     
     def is_available(self) -> bool:
@@ -118,106 +110,112 @@ class OCRService:
             if not self.pdf2image_available:
                 raise ValueError("pdf2image not available for PDF processing")
             
-            # Конвертируем с высоким DPI для лучшего качества OCR технических чертежей
-            images = convert_from_bytes(file_content, dpi=400, fmt='png')
-            all_text = []
+            # АДАПТИВНАЯ ОБРАБОТКА PDF: пробуем разные комбинации параметров (DPI, контраст, preprocessing)
+            # Агент автоматически подбирает оптимальные параметры для максимального качества OCR
             
-            for img in images:
-                # Используем preprocessing если доступен OpenRouterService
-                if self.openrouter_service:
-                    img = self.openrouter_service._preprocess_image_for_ocr(img)
-                
-                # Пробуем разные PSM режимы для технических чертежей
-                text = ""
-                for psm_mode in [11, 6, 4]:
-                    try:
-                        text = pytesseract.image_to_string(
-                            img, 
-                            lang=tesseract_langs, 
-                            config=f'--psm {psm_mode} --oem 3'
-                        )
-                        if text and len(text.strip()) > 10:
-                            ocr_logger.info(f"   ✅ Tesseract успешно извлек текст со страницы {len(all_text)+1} с PSM {psm_mode}")
-                            break
-                    except:
-                        continue
-                
-                if not text:
-                    text = pytesseract.image_to_string(img, lang=tesseract_langs, config='--psm 6 --oem 3')
-                
-                all_text.append(text)
+            # Стратегии обработки от простых к сложным
+            strategies = [
+                {"dpi": 300, "preprocess": True, "contrast": 1.5, "psm": [6]},
+                {"dpi": 400, "preprocess": True, "contrast": 2.0, "psm": [11, 6, 4]},
+                {"dpi": 500, "preprocess": True, "contrast": 2.5, "psm": [11, 6, 4, 3]},
+                {"dpi": 600, "preprocess": True, "contrast": 3.0, "psm": [11, 6]},
+            ]
             
-            return "\n\n--- Page Break ---\n\n".join(all_text)
-    
-    async def _process_with_langchain_ocr(
-        self,
-        file_content: bytes,
-        file_type: str,
-        languages: List[str]
-    ) -> Optional[str]:
-        """
-        Process file with LangChain OCR Library (fallback method)
-        Converts image and PDF documents into clean Markdown
-        """
-        if not self.langchain_ocr_available:
-            return None
-        
-        try:
-            ocr_logger.info("🔄 Шаг 3: Пробуем LangChain OCR Library...")
-            
-            # Create OCR chain
-            if LANGCHAIN_OCR_AVAILABLE:
-                from langchain_ocr_lib import OCRChain
-                
-                # Initialize OCR chain
-                ocr_chain = OCRChain()
-                
-                is_image = file_type.startswith("image/")
-                
-                if is_image:
-                    # Process image
-                    from PIL import Image
-                    image = Image.open(io.BytesIO(file_content))
-                    # Save to temporary bytes
-                    img_buffer = io.BytesIO()
-                    image.save(img_buffer, format='PNG')
-                    img_buffer.seek(0)
+            for strategy_idx, strategy in enumerate(strategies, 1):
+                try:
+                    ocr_logger.info(f"🔄 Стратегия {strategy_idx}/{len(strategies)}: DPI={strategy['dpi']}, контраст={strategy['contrast']}, PSM={strategy['psm']}")
                     
-                    # Process with LangChain OCR
-                    result = ocr_chain.run(image=img_buffer.getvalue())
-                    if result and hasattr(result, 'text'):
-                        text = result.text
-                    elif isinstance(result, str):
-                        text = result
-                    else:
-                        text = str(result) if result else None
+                    # Конвертируем PDF в изображения с заданным DPI
+                    images = convert_from_bytes(file_content, dpi=strategy['dpi'], fmt='png')
+                    all_text = []
                     
-                    if text and len(text.strip()) > 0:
-                        ocr_logger.info(f"✅ LangChain OCR успешно извлек текст: {len(text)} символов")
-                        return text
-                else:
-                    # Process PDF - save to temporary file or use directly
-                    pdf_buffer = io.BytesIO(file_content)
-                    
-                    # Process with LangChain OCR
-                    result = ocr_chain.run(pdf=pdf_buffer)
-                    if result and hasattr(result, 'text'):
-                        text = result.text
-                    elif isinstance(result, str):
-                        text = result
-                    else:
-                        text = str(result) if result else None
-                    
-                    if text and len(text.strip()) > 0:
-                        ocr_logger.info(f"✅ LangChain OCR успешно извлек текст из PDF: {len(text)} символов")
-                        return text
+                    for page_num, img in enumerate(images, 1):
+                        page_text = None
                         
-        except Exception as e:
-            ocr_logger.warning(f"⚠️ LangChain OCR не сработал: {e}")
-            return None
-        
-        return None
+                        # Preprocessing с настраиваемым контрастом
+                        if strategy['preprocess'] and self.openrouter_service:
+                            processed_img = self._enhance_image_for_ocr(img, contrast=strategy['contrast'])
+                        else:
+                            processed_img = img
+                        
+                        # Пробуем разные PSM режимы
+                        for psm_mode in strategy['psm']:
+                            try:
+                                text = pytesseract.image_to_string(
+                                    processed_img,
+                                    lang=tesseract_langs,
+                                    config=f'--psm {psm_mode} --oem 3'
+                                )
+                                
+                                if text and len(text.strip()) > 10:
+                                    page_text = text
+                                    ocr_logger.info(f"   ✅ Страница {page_num}: извлечено {len(text)} символов (PSM {psm_mode})")
+                                    break
+                            except Exception as e:
+                                ocr_logger.debug(f"   ⚠️ PSM {psm_mode} не сработал: {e}")
+                                continue
+                        
+                        if page_text:
+                            all_text.append(page_text)
+                        else:
+                            # Fallback: пробуем без preprocessing
+                            try:
+                                text = pytesseract.image_to_string(img, lang=tesseract_langs, config='--psm 6 --oem 3')
+                                if text and len(text.strip()) > 0:
+                                    all_text.append(text)
+                            except:
+                                pass
+                    
+                    # Если получили текст хотя бы с одной страницы, возвращаем результат
+                    if all_text:
+                        result = "\n\n--- Page Break ---\n\n".join(all_text)
+                        ocr_logger.info(f"✅ Адаптивная обработка успешна (стратегия {strategy_idx}): извлечено {len(result)} символов со {len(all_text)} страниц")
+                        return result
+                    else:
+                        ocr_logger.warning(f"⚠️ Стратегия {strategy_idx} не дала результата, пробуем следующую...")
+                        
+                except Exception as e:
+                    ocr_logger.warning(f"⚠️ Ошибка в стратегии {strategy_idx}: {e}, пробуем следующую...")
+                    continue
+            
+            # Если все стратегии не сработали, возвращаем пустой результат
+            ocr_logger.error("❌ Все стратегии адаптивной обработки не дали результата")
+            return ""
     
+    def _enhance_image_for_ocr(self, image: Image.Image, contrast: float = 2.0) -> Image.Image:
+        """
+        Улучшение изображения для OCR с настраиваемыми параметрами (контраст, резкость, яркость)
+        """
+        try:
+            # Конвертируем в RGB если нужно
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            # Увеличиваем контраст (настраиваемый параметр)
+            enhancer = ImageEnhance.Contrast(image)
+            image = enhancer.enhance(contrast)
+            
+            # Улучшаем резкость
+            enhancer = ImageEnhance.Sharpness(image)
+            image = enhancer.enhance(1.5)
+            
+            # Коррекция яркости
+            enhancer = ImageEnhance.Brightness(image)
+            pixels = list(image.getdata())
+            if pixels:
+                avg_brightness = sum(sum(pixel) / 3 for pixel in pixels) / len(pixels)
+                if avg_brightness < 128:
+                    image = enhancer.enhance(1.2)  # Осветляем
+                elif avg_brightness > 200:
+                    image = enhancer.enhance(0.9)  # Затемняем
+            
+            # Применяем фильтр для уменьшения шума
+            image = image.filter(ImageFilter.MedianFilter(size=3))
+            
+            return image
+        except Exception as e:
+            ocr_logger.warning(f"⚠️ Ошибка улучшения изображения: {e}, используем оригинал")
+            return image
     async def process_file(
         self,
         file_content: bytes,
@@ -486,21 +484,6 @@ class OCRService:
                         ocr_logger.error(f"Tesseract OCR не сработал: {e}")
                         ocr_text = None
         
-        # ШАГ 3: Если все предыдущие методы не сработали, пробуем LangChain OCR Library
-        if not ocr_text or len(ocr_text.strip()) == 0:
-            if self.langchain_ocr_available:
-                try:
-                    ocr_logger.info("🔄 Шаг 3: Все стандартные методы не сработали, пробуем LangChain OCR Library...")
-                    langchain_text = await self._process_with_langchain_ocr(file_content, file_type, languages)
-                    
-                    if langchain_text and len(langchain_text.strip()) > 0:
-                        ocr_text = langchain_text
-                        processing_info["method"] = "langchain_ocr"
-                        processing_info["fallback_used"] = True
-                        ocr_logger.info(f"✅ LangChain OCR успешно извлек текст: {len(ocr_text)} символов")
-                except Exception as e:
-                    ocr_logger.warning(f"⚠️ LangChain OCR не сработал: {e}")
-        
         # Проверяем результат
         actual_time = time.time() - start_time
         processing_info["actual_time"] = actual_time
@@ -511,8 +494,7 @@ class OCRService:
             ocr_logger.error(f"   OpenRouter доступен: {self.openrouter_service and self.openrouter_service.is_available()}")
             ocr_logger.error(f"   Tesseract доступен: {self.tesseract_available}")
             ocr_logger.error(f"   PDF2Image доступен: {self.pdf2image_available}")
-            ocr_logger.error(f"   LangChain OCR доступен: {self.langchain_ocr_available}")
-            raise Exception("OCR processing failed: все методы (OpenRouter, PyPDF2, Tesseract, LangChain OCR) не смогли извлечь текст")
+            raise Exception("OCR processing failed: все методы (OpenRouter, PyPDF2, Tesseract с адаптивными параметрами) не смогли извлечь текст")
             
             ocr_logger.info(
                 f"OCR completed - Method: {processing_info['method']}, "
