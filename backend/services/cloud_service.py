@@ -132,7 +132,7 @@ class CloudService:
                                                         download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={item_weblink}"
                                                     else:
                                                         # Fallback на публичную ссылку
-                                                        download_url = item_url
+                                                    download_url = item_url
                                                     files.append({
                                                         'name': item_name,
                                                         'type': 'file',
@@ -300,7 +300,7 @@ class CloudService:
                                                 download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={item_weblink}"
                                             else:
                                                 # Fallback на публичную ссылку
-                                                download_url = item_url
+                                            download_url = item_url
                                             
                                             items.append({
                                                 'name': item_name,
@@ -418,35 +418,72 @@ class CloudService:
                     api_logger.warning(f"Received HTML instead of file. Content-Type: {content_type}, First bytes: {first_bytes}")
                     api_logger.warning(f"HTML preview: {content[:500].decode('utf-8', errors='ignore')}")
                     
-                    # If we already have a public URL with weblink, try to use it directly for download
-                    # This handles files in subfolders like /public/2RNv/faZLz1cLQ/0002/filename.pdf
-                    if '/public/' in url and expected_filename:
-                        api_logger.info(f"Trying to construct direct download URL from weblink in URL path")
-                        # Extract full weblink path from URL: /public/2RNv/faZLz1cLQ/0002/filename.pdf
-                        weblink_match = re.search(r'/public/(.+)$', url)
-                        if weblink_match:
-                            full_weblink_path = weblink_match.group(1)
-                            api_logger.info(f"Extracted weblink path: {full_weblink_path}")
+                    # Если это публичный URL, попробуем разные варианты для прямого доступа к файлу
+                    if '/public/' in url:
+                        api_logger.info(f"Public URL returned HTML, trying different URL encodings and direct file access")
+                        
+                        from urllib.parse import quote, unquote, urlparse, parse_qs
+                        import urllib.parse
+                        
+                        # Извлекаем путь после /public/
+                        match = re.search(r'/public/(.+)$', url)
+                        if match:
+                            weblink_path = match.group(1)
+                            api_logger.info(f"Extracted weblink path: {weblink_path}")
                             
-                            # Try direct API download with full weblink path
-                            from urllib.parse import quote
-                            encoded_weblink = quote(full_weblink_path, safe='/')
-                            api_download_url = f"https://cloud.mail.ru/api/v2/file/download?weblink={encoded_weblink}"
+                            # Попробуем разные варианты URL-кодирования
+                            variants = []
                             
-                            api_logger.info(f"Trying direct API download with weblink path: {api_download_url[:150]}")
-                            try:
-                                headers = {
-                                    'Referer': 'https://cloud.mail.ru/',
-                                    'Origin': 'https://cloud.mail.ru'
-                                }
-                                direct_api_response = self.session.get(api_download_url, timeout=30, stream=True, allow_redirects=True, headers=headers)
-                                if direct_api_response.status_code == 200:
-                                    direct_api_content = direct_api_response.content
-                                    if len(direct_api_content) > 1000 and not (direct_api_content[:2] == b'<!' or b'<html' in direct_api_content[:100].lower()):
-                                        api_logger.info(f"Successfully downloaded via direct API URL with weblink path")
-                                        return direct_api_content
-                            except Exception as e:
-                                api_logger.warning(f"Direct API download with weblink path failed: {str(e)}")
+                            # Вариант 1: Оригинальный путь (уже декодированный)
+                            variants.append((weblink_path, "original"))
+                            
+                            # Вариант 2: URL-кодированный путь (кодируем только специальные символы, не '/')
+                            variants.append((quote(weblink_path, safe='/'), "quote safe /"))
+                            
+                            # Вариант 3: Полностью URL-кодированный
+                            variants.append((quote(weblink_path, safe=''), "fully quoted"))
+                            
+                            # Вариант 4: Двойное кодирование
+                            variants.append((quote(quote(weblink_path, safe='/'), safe='/'), "double quoted"))
+                            
+                            # Вариант 5: Если есть expected_filename, попробуем заменить имя файла
+                            if expected_filename:
+                                # Разделяем путь на части
+                                parts = weblink_path.split('/')
+                                if len(parts) > 0:
+                                    # Заменяем последнюю часть (имя файла) на expected_filename
+                                    parts[-1] = expected_filename
+                                    new_path = '/'.join(parts)
+                                    variants.append((new_path, "with expected filename"))
+                                    variants.append((quote(new_path, safe='/'), "with expected filename quoted"))
+                            
+                            # Пробуем каждый вариант
+                            for variant_path, variant_name in variants:
+                                # Пробуем прямую ссылку на публичный файл
+                                public_url_variant = f"https://cloud.mail.ru/public/{variant_path}"
+                                api_logger.info(f"Trying public URL variant ({variant_name}): {public_url_variant[:150]}")
+                                
+                                try:
+                                    variant_response = self.session.get(public_url_variant, timeout=30, stream=True, allow_redirects=True, headers={
+                                        'Referer': 'https://cloud.mail.ru/',
+                                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                                    })
+                                    
+                                    if variant_response.status_code == 200:
+                                        variant_content = variant_response.content
+                                        variant_content_type = variant_response.headers.get('Content-Type', '').lower()
+                                        
+                                        # Проверяем, что это файл, а не HTML
+                                        if len(variant_content) > 1000:
+                                            first_bytes_variant = variant_content[:4]
+                                            if not (first_bytes_variant[0:2] == b'<!' or b'<html' in variant_content[:100].lower()) and 'text/html' not in variant_content_type:
+                                                api_logger.info(f"Successfully downloaded using public URL variant ({variant_name})")
+                                                return variant_content
+                                        elif variant_response.status_code == 404:
+                                            api_logger.debug(f"Variant {variant_name} returned 404")
+                                except Exception as e:
+                                    api_logger.debug(f"Variant {variant_name} failed: {str(e)}")
+                                    continue
                     
                     # Try to extract direct download link from HTML
                     soup = BeautifulSoup(content, 'html.parser')
@@ -556,12 +593,12 @@ class CloudService:
                                     'Origin': 'https://cloud.mail.ru'
                                 }
                                 alt_response = self.session.get(download_url, timeout=30, stream=True, allow_redirects=True, headers=headers)
-                                if alt_response.status_code == 200:
-                                    alt_content = alt_response.content
-                                    # Check if it's actually a file
+                            if alt_response.status_code == 200:
+                                alt_content = alt_response.content
+                                # Check if it's actually a file
                                     if len(alt_content) > 1000 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
                                         api_logger.info(f"Successfully downloaded using API URL with full weblink path")
-                                        return alt_content
+                                    return alt_content
                                 elif alt_response.status_code == 403:
                                     api_logger.warning(f"API returned 403 for weblink, will try direct public URL")
                             except Exception as e:
@@ -656,7 +693,7 @@ class CloudService:
                                 api_logger.info(f"Trying download link {i+1}/{min(len(filtered_links), 5)}: {download_link[:100]}...")
                                 alt_response = self.session.get(download_link, timeout=30, stream=True, allow_redirects=True)
                                 if alt_response.status_code == 200:
-                                    alt_content = alt_response.content
+                        alt_content = alt_response.content
                                     # Additional check: verify file size is reasonable (not a tiny HTML page)
                                     if len(alt_content) > 1000 and not (alt_content[:2] == b'<!' or b'<html' in alt_content[:100].lower()):
                                         # Check link type - prefer Mail.ru Cloud, but allow external if matches filename
@@ -735,7 +772,7 @@ class CloudService:
                                                     continue  # Skip if filename doesn't match
                                         
                                         api_logger.info(f"Successfully downloaded using extracted link {i+1} (size: {len(alt_content)} bytes)")
-                                        return alt_content
+                            return alt_content
                                     else:
                                         api_logger.warning(f"Download link {i+1} returned invalid content (too small or HTML)")
                             except Exception as e:
