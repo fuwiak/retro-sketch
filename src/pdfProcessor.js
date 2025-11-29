@@ -403,7 +403,7 @@ export async function processPdfWithOCR(file, languages = ['rus'], progressCallb
       progressCallback(`❌ Backend OCR failed: ${errorMessage}`);
     }
     
-    throw new Error(`OCR processing failed: ${errorMessage}. Используется только OpenRouter + OCR fallback'и. Groq отключен.`);
+    throw new Error(`OCR processing failed: ${errorMessage}. Используется только OpenRouter + OCR fallback'и (Tesseract, LangChain OCR). Groq отключен.`);
   }
 }
 
