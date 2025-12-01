@@ -217,9 +217,9 @@ export async function extractAllData(ocrText) {
   
   // Step 1: Try OpenRouter first (same method as chat - works great!)
   try {
-    console.log('📊 Извлечение данных через OpenRouter (как в чате)...');
+    console.log('📊 Extracting data via OpenRouter (like in chat)...');
     aiData = await extractStructuredDataWithOpenRouter(ocrText);
-    console.log('✅ OpenRouter успешно извлек данные');
+    console.log('✅ OpenRouter successfully extracted data');
   } catch (openRouterError) {
     console.warn('OpenRouter extraction failed, trying Groq fallback:', openRouterError);
     
@@ -227,7 +227,7 @@ export async function extractAllData(ocrText) {
     try {
       const { extractStructuredData } = await import('./groqAgent.js');
       aiData = await extractStructuredData(ocrText);
-      console.log('✅ Groq успешно извлек данные');
+      console.log('✅ Groq successfully extracted data');
     } catch (groqError) {
       console.warn('Groq extraction also failed:', groqError);
       aiData = null;

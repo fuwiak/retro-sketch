@@ -203,40 +203,40 @@ async function optimizeImageForOCR(file) {
     
     reader.onload = (e) => {
       img.onload = () => {
-        // Определяем максимальный размер для OCR (достаточно для качества, но быстро)
-        const MAX_DIMENSION = 2048; // Максимальная сторона
-        const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB максимальный размер файла
+        // Determine maximum size for OCR (sufficient for quality, but fast)
+        const MAX_DIMENSION = 2048; // Maximum side
+        const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB maximum file size
         
         let width = img.width;
         let height = img.height;
         let scale = 1;
         
-        // Масштабируем если изображение слишком большое
+        // Scale if image is too large
         if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
           scale = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
           width = Math.round(width * scale);
           height = Math.round(height * scale);
         }
         
-        // Создаем canvas для оптимизации
+        // Create canvas for optimization
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         
-        // Рисуем изображение с масштабированием
+        // Draw image with scaling
         ctx.drawImage(img, 0, 0, width, height);
         
-        // Конвертируем в blob с оптимальным качеством
+        // Convert to blob with optimal quality
         canvas.toBlob((blob) => {
           if (!blob) {
-            resolve(file); // Если не удалось, возвращаем оригинал
+            resolve(file); // If failed, return original
             return;
           }
           
-          // Если файл все еще большой, сжимаем сильнее
+          // If file is still large, compress more
           if (blob.size > MAX_FILE_SIZE) {
-            // Повторное сжатие с меньшим качеством
+            // Re-compress with lower quality
             canvas.toBlob((compressedBlob) => {
               if (compressedBlob && compressedBlob.size <= MAX_FILE_SIZE * 1.5) {
                 const optimizedFile = new File([compressedBlob], file.name, { 
@@ -244,27 +244,27 @@ async function optimizeImageForOCR(file) {
                 });
                 resolve(optimizedFile);
               } else {
-                resolve(file); // Возвращаем оригинал если сжатие не помогло
+                resolve(file); // Return original if compression didn't help
               }
-            }, file.type || 'image/jpeg', 0.75); // Качество 75%
+            }, file.type || 'image/jpeg', 0.75); // Quality 75%
           } else {
             const optimizedFile = new File([blob], file.name, { 
               type: file.type || 'image/jpeg' 
             });
             resolve(optimizedFile);
           }
-        }, file.type || 'image/jpeg', 0.85); // Качество 85% для OCR
+        }, file.type || 'image/jpeg', 0.85); // Quality 85% for OCR
       };
       
       img.onerror = () => {
-        resolve(file); // Если ошибка загрузки, возвращаем оригинал
+        resolve(file); // If load error, return original
       };
       
       img.src = e.target.result;
     };
     
     reader.onerror = () => {
-      resolve(file); // При ошибке чтения возвращаем оригинал
+      resolve(file); // On read error return original
     };
     
     reader.readAsDataURL(file);
@@ -272,7 +272,7 @@ async function optimizeImageForOCR(file) {
 }
 
 export async function processPdfWithOCR(file, languages = ['rus'], progressCallback = null, ocrMethod = 'auto', ocrQuality = 'balanced', abortSignal = null) {
-  let progressTimer = null; // Объявляем на уровне функции для доступа в catch
+  let progressTimer = null; // Declare at function level for access in catch
   
   try {
     // Optimize image files before sending
@@ -281,7 +281,7 @@ export async function processPdfWithOCR(file, languages = ['rus'], progressCallb
     
     if (isImage) {
       if (progressCallback) {
-        progressCallback(`Оптимизация изображения для OCR...`);
+        progressCallback(`Optimizing image for OCR...`);
       }
       fileToProcess = await optimizeImageForOCR(file);
       
@@ -289,7 +289,7 @@ export async function processPdfWithOCR(file, languages = ['rus'], progressCallb
         const originalSize = (file.size / 1024).toFixed(1);
         const optimizedSize = (fileToProcess.size / 1024).toFixed(1);
         if (fileToProcess.size < file.size) {
-          progressCallback(`✓ Изображение оптимизировано: ${originalSize} KB → ${optimizedSize} KB`);
+          progressCallback(`✓ Image optimized: ${originalSize} KB → ${optimizedSize} KB`);
         }
       }
     }
@@ -312,21 +312,21 @@ export async function processPdfWithOCR(file, languages = ['rus'], progressCallb
       progressCallback(`Sending to backend OCR service...`);
     }
     
-    // Увеличенный таймаут для OCR обработки (может занять до 5 минут для больших PDF)
-    // Используем переданный signal или создаем новый
+    // Increased timeout for OCR processing (can take up to 5 minutes for large PDFs)
+    // Use provided signal or create new one
     const controller = abortSignal ? { signal: abortSignal, abort: () => {} } : new AbortController();
     const timeoutId = abortSignal ? null : setTimeout(() => controller.abort(), 300000); // 5 минут
     
-    // Запускаем таймер для показа реального времени прогресса
+    // Start timer to show real-time progress
     let elapsedSeconds = 0;
     if (progressCallback) {
       progressTimer = setInterval(() => {
         elapsedSeconds += 2;
         const minutes = Math.floor(elapsedSeconds / 60);
         const seconds = elapsedSeconds % 60;
-        const timeStr = minutes > 0 ? `${minutes}м ${seconds}с` : `${seconds}с`;
-        progressCallback(`⏳ Обработка... (${timeStr})`);
-      }, 2000); // Обновляем каждые 2 секунды
+        const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+        progressCallback(`⏳ Processing... (${timeStr})`);
+      }, 2000); // Update every 2 seconds
     }
     
     const response = await fetch(`${API_BASE_URL}/ocr/process`, {
@@ -350,22 +350,22 @@ export async function processPdfWithOCR(file, languages = ['rus'], progressCallb
     }
     
     if (progressCallback) {
-      progressCallback(`Обработка ответа от backend...`);
+      progressCallback(`Processing backend response...`);
     }
     
     const result = await response.json();
     
     // Проверяем, что результат валиден
     if (!result) {
-      throw new Error("Backend вернул пустой ответ");
+      throw new Error("Backend returned empty response");
     }
     
     if (progressCallback && result.processing_info) {
       const info = result.processing_info;
-      progressCallback(`Метод: ${info.method_used || info.method || 'unknown'}`);
-      progressCallback(`Время: ${info.actual_time?.toFixed(2) || 'N/A'}s`);
+      progressCallback(`Method: ${info.method_used || info.method || 'unknown'}`);
+      progressCallback(`Time: ${info.actual_time?.toFixed(2) || 'N/A'}s`);
       if (info.reasoning) {
-        progressCallback(`Причина: ${info.reasoning}`);
+        progressCallback(`Reason: ${info.reasoning}`);
       }
     }
     
@@ -384,26 +384,26 @@ export async function processPdfWithOCR(file, languages = ['rus'], progressCallb
   } catch (error) {
     console.error('OCR processing error:', error);
     
-    // Останавливаем таймер при ошибке
+    // Stop timer on error
     if (progressTimer) {
       clearInterval(progressTimer);
       progressTimer = null;
     }
     
-    // Groq полностью отключен - используется только OpenRouter + OCR fallback'и
-    // Если backend не сработал, возвращаем ошибку без fallback на Groq
+    // Groq is completely disabled - only OpenRouter + OCR fallbacks are used
+    // If backend failed, return error without Groq fallback
     let errorMessage = error.message;
     
-    // Обрабатываем таймаут
+    // Handle timeout
     if (error.name === 'AbortError' || errorMessage.includes('timeout') || errorMessage.includes('failed to respond')) {
-      errorMessage = 'Таймаут при обработке OCR. Файл слишком большой или сервер перегружен. Попробуйте позже или используйте меньший файл.';
+      errorMessage = 'OCR processing timeout. File is too large or server is overloaded. Please try again later or use a smaller file.';
     }
     
     if (progressCallback) {
       progressCallback(`❌ Backend OCR failed: ${errorMessage}`);
     }
     
-    throw new Error(`OCR processing failed: ${errorMessage}. Используется только OpenRouter + OCR fallback'и (Tesseract, LangChain OCR). Groq отключен.`);
+    throw new Error(`OCR processing failed: ${errorMessage}. Only OpenRouter + OCR fallbacks (Tesseract, LangChain OCR) are used. Groq is disabled.`);
   }
 }
 

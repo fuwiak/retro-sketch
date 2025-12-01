@@ -12,7 +12,7 @@ import * as telegramService from "./telegramService.js";
 import { RectangleSelection, initPdfSelection, extractTextFromSelection, extractSelectionAsImage, renderSelectionOverlay } from "./pdfSelection.js";
 import { getApiBaseUrl } from "./config.js";
 
-// Глобальные переменные для управления процессом
+// Global variables for process management
 let currentAbortController = null;
 let currentStatusTimer = null;
 let isProcessing = false;
@@ -90,7 +90,7 @@ let humAudio = null;
 let currentPdfFile = null;
 let extractedData = null;
 let translatedData = null;
-let ocrResult = null; // Глобальная переменная для доступа из чата
+let ocrResult = null; // Global variable for chat access
 let steelEquivData = {};
 let cropMode = false;
 let cropModeType = 'polygon'; // 'polygon' or 'rectangle'
@@ -108,7 +108,7 @@ let userSettings = {
   humEnabled: true,
   soundsEnabled: true,
   color: "rgb(255, 0, 0)",
-  ocrLanguage: "rus", // По умолчанию русский
+  ocrLanguage: "rus", // Default Russian
   autoTranslate: true,
   findSteelEquivalents: true,
   exportDocx: true,
@@ -234,12 +234,12 @@ function clearProgress() {
   renderProgress();
 }
 
-// Функция для остановки текущего процесса
+// Function to stop current process
 function stopCurrentProcess() {
   if (currentAbortController) {
     currentAbortController.abort();
     currentAbortController = null;
-    log("🛑 Процесс остановлен пользователем");
+    log("🛑 Process stopped by user");
   }
   
   if (currentStatusTimer) {
@@ -250,8 +250,8 @@ function stopCurrentProcess() {
   isProcessing = false;
   els.processBtn.style.display = 'inline-block';
   els.stopProcessBtn.style.display = 'none';
-  els.status.textContent = "💤 Обработка остановлена";
-  updateProgress('OCR Processing', 'error', 'Процесс остановлен пользователем');
+  els.status.textContent = "💤 Processing stopped";
+  updateProgress('OCR Processing', 'error', 'Process stopped by user');
 }
 
 function renderProgress() {
@@ -350,7 +350,7 @@ els.resetPdfBtn.addEventListener("click", () => {
   els.polygonCanvas.height = 0;
   els.polygonCanvas.style.display = 'none';
   
-  // Очищаем preview PDF
+  // Clear PDF preview
   els.pdfPreview.innerHTML = '';
   els.pdfPreview.classList.add('hidden');
   els.pdfPreviewPlaceholder.style.display = 'block';
@@ -957,11 +957,11 @@ els.pdfFileInput.addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   
-  // Поддерживаем PDF, PNG, JPG, JPEG
+  // Support PDF, PNG, JPG, JPEG
   const supportedTypes = ["application/pdf", "image/png", "image/jpeg", "image/jpg"];
   if (!supportedTypes.includes(file.type)) {
     els.status.textContent = "❌ Please select a PDF or image file (PNG/JPG)";
-    log("❌ Invalid file type - поддерживаются только PDF, PNG, JPG");
+    log("❌ Invalid file type - only PDF, PNG, JPG are supported");
     playClick(250);
     return;
   }
@@ -1016,7 +1016,7 @@ els.pdfFileInput.addEventListener("change", async (e) => {
   
   playTeleportFX();
   
-  // Останавливаем текущий процесс при загрузке нового файла
+  // Stop current process when loading new file
   if (isProcessing) {
     stopCurrentProcess();
   }
@@ -1037,13 +1037,13 @@ els.processBtn.addEventListener("click", async () => {
     return;
   }
   
-  // Останавливаем предыдущий процесс, если он идет
+  // Stop previous process if running
   if (isProcessing) {
     stopCurrentProcess();
-    await new Promise(resolve => setTimeout(resolve, 500)); // Даем время на остановку
+    await new Promise(resolve => setTimeout(resolve, 500)); // Give time to stop
   }
   
-  // Создаем новый AbortController для этого процесса
+  // Create new AbortController for this process
   currentAbortController = new AbortController();
   isProcessing = true;
   els.processBtn.style.display = 'none';
@@ -1072,7 +1072,7 @@ els.processBtn.addEventListener("click", async () => {
     log(`📝 Languages: ${languages.join(', ')}`);
     els.status.textContent = "⏳ Running OCR...";
     
-    // ocrResult уже объявлен глобально
+    // ocrResult is already declared globally
     if (currentCropArea) {
       // Use cropped image (polygon or rectangle)
       const areaInfo = currentCropArea.type === 'polygon' 
@@ -1106,13 +1106,13 @@ els.processBtn.addEventListener("click", async () => {
         // Create a temporary file-like object for cropped image
         updateProgress('OCR Processing', 'active', `Sending cropped image to OCR engine...`);
         addProgressSubStep('OCR Processing', `Converting to blob format...`);
-        log(`📤 Отправляем вырезанное изображение в OCR...`);
+        log(`📤 Sending cropped image to OCR...`);
         const croppedBlob = await fetch(croppedImage).then(r => r.blob());
         const croppedFile = new File([croppedBlob], 'cropped-area.png', { type: 'image/png' });
-        addProgressSubStep('OCR Processing', `Файл создан: ${(croppedBlob.size / 1024).toFixed(1)} KB`);
+        addProgressSubStep('OCR Processing', `File created: ${(croppedBlob.size / 1024).toFixed(1)} KB`);
         
-        updateProgress('OCR Processing', 'active', `Анализируем изображение с помощью OpenRouter...`);
-        addProgressSubStep('OCR Processing', `Отправка в OpenRouter OCR...`);
+        updateProgress('OCR Processing', 'active', `Analyzing image with OpenRouter...`);
+        addProgressSubStep('OCR Processing', `Sending to OpenRouter OCR...`);
         
         // Create progress callback for detailed logging
         const progressCallback = (msg) => {
@@ -1156,23 +1156,23 @@ els.processBtn.addEventListener("click", async () => {
       log(`📄 Processing full PDF document`);
       log(`📄 File size: ${(currentPdfFile.size / 1024).toFixed(1)} KB`);
       
-      updateProgress('OCR Processing', 'active', `Отправка PDF в OCR движок...`);
-      addProgressSubStep('OCR Processing', `Отправка в OpenRouter OCR...`);
-      log(`📤 Отправляем PDF в OpenRouter OCR...`);
+      updateProgress('OCR Processing', 'active', `Sending PDF to OCR engine...`);
+      addProgressSubStep('OCR Processing', `Sending to OpenRouter OCR...`);
+      log(`📤 Sending PDF to OpenRouter OCR...`);
       
       updateProgress('OCR Processing', 'active', `Analyzing PDF with AI vision models...`);
       addProgressSubStep('OCR Processing', `Waiting for AI response...`);
       
-      // Запускаем таймер для показа времени ожидания
+      // Start timer to show waiting time
       let elapsedSeconds = 0;
       let statusTimer = setInterval(() => {
         elapsedSeconds += 2;
         const minutes = Math.floor(elapsedSeconds / 60);
         const seconds = elapsedSeconds % 60;
-        const timeStr = minutes > 0 ? `${minutes}м ${seconds}с` : `${seconds}с`;
+        const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
         updateProgress('OCR Processing', 'active', `Analyzing PDF with AI vision models... (${timeStr})`);
         els.status.textContent = `⏳ OCR Processing... (${timeStr})`;
-      }, 2000); // Обновляем каждые 2 секунды
+      }, 2000); // Update every 2 seconds
       
       // Create progress callback for detailed logging
       const progressCallback = (msg) => {
@@ -1196,7 +1196,7 @@ els.processBtn.addEventListener("click", async () => {
       log(`📊 Model used: ${ocrResult.model || 'unknown'}`);
       log(`📊 Confidence: ${(ocrResult.confidence * 100).toFixed(1)}%`);
       } finally {
-        // Останавливаем таймер в любом случае (успех или ошибка)
+        // Stop timer in any case (success or error)
         if (statusTimer) {
           clearInterval(statusTimer);
           statusTimer = null;
@@ -1371,62 +1371,62 @@ function renderResults() {
   html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">';
   html += '<strong style="color: var(--ui-color);">Raw OCR Text:</strong>';
   html += '<div style="display: flex; gap: 5px;">';
-  html += '<button id="rawTextToggle" style="background: rgba(0,0,0,0.8); border: 1px solid var(--ui-color); color: var(--ui-color); padding: 3px 8px; font-family: inherit; font-size: 0.7rem; cursor: pointer; border-radius: 8px;">Оригинал / Translated</button>';
+  html += '<button id="rawTextToggle" style="background: rgba(0,0,0,0.8); border: 1px solid var(--ui-color); color: var(--ui-color); padding: 3px 8px; font-family: inherit; font-size: 0.7rem; cursor: pointer; border-radius: 8px;">Original / Translated</button>';
   html += '</div>';
   html += '</div>';
   
-  // Получаем оригинальный текст
+  // Get original text
   const originalText = ocrResult && ocrResult.text ? ocrResult.text : (extractedData && extractedData.rawText ? extractedData.rawText : '');
   const translatedText = translatedData.rawText || '';
   
-  // По умолчанию показываем переведенную версию, если доступна
+  // By default show translated version if available
   const isTranslatedMode = translatedText && translatedText !== originalText;
   
   html += `<div id="rawTextContent" style="margin-top: 5px; font-size: 0.75rem; opacity: 0.8; max-height: 400px; overflow-y: auto; border: 1px solid var(--ui-color); padding: 5px; white-space: pre-wrap; word-wrap: break-word;">`;
   const initialText = isTranslatedMode ? translatedText : originalText;
   if (initialText) {
-    // Показываем полный текст (или до 10000 символов для производительности)
-    const displayText = initialText.length > 10000 ? initialText.substring(0, 10000) + '\n\n... (текст обрезан, полный текст доступен в экспорте)' : initialText;
+    // Show full text (or up to 10000 characters for performance)
+    const displayText = initialText.length > 10000 ? initialText.substring(0, 10000) + '\n\n... (text truncated, full text available in export)' : initialText;
     html += displayText.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
   } else {
-    html += isTranslatedMode ? 'Переведенный текст недоступен' : 'Оригинальный текст недоступен';
+    html += isTranslatedMode ? 'Translated text unavailable' : 'Original text unavailable';
   }
   html += `</div>`;
   html += '</div>';
   
-  // Сохраняем тексты для переключения
+  // Save texts for switching
   window._rawTextOriginal = originalText;
   window._rawTextTranslated = translatedText;
   
   html += '</div>';
   els.resultsList.innerHTML = html;
   
-  // Добавляем обработчик для переключения между оригинальным и переведенным текстом
+  // Add handler for switching between original and translated text
   const rawTextToggle = document.getElementById('rawTextToggle');
   const rawTextContent = document.getElementById('rawTextContent');
   if (rawTextToggle && rawTextContent && window._rawTextOriginal && window._rawTextTranslated) {
-    let showingOriginal = !isTranslatedMode; // Начинаем с переведенного, если доступно
+    let showingOriginal = !isTranslatedMode; // Start with translated if available
     
     rawTextToggle.addEventListener('click', () => {
       showingOriginal = !showingOriginal;
       const textToShow = showingOriginal ? window._rawTextOriginal : window._rawTextTranslated;
-      const label = showingOriginal ? 'Оригинал' : 'Переведено';
+      const label = showingOriginal ? 'Original' : 'Translated';
       
       rawTextToggle.textContent = label;
       
       if (textToShow) {
-        // Показываем полный текст (или до 10000 символов для производительности)
-        const displayText = textToShow.length > 10000 ? textToShow.substring(0, 10000) + '\n\n... (текст обрезан, полный текст доступен в экспорте)' : textToShow;
+        // Show full text (or up to 10000 characters for performance)
+        const displayText = textToShow.length > 10000 ? textToShow.substring(0, 10000) + '\n\n... (text truncated, full text available in export)' : textToShow;
         rawTextContent.textContent = displayText;
       } else {
-        rawTextContent.textContent = showingOriginal ? 'Оригинальный текст недоступен' : 'Переведенный текст недоступен';
+        rawTextContent.textContent = showingOriginal ? 'Original text unavailable' : 'Translated text unavailable';
       }
       
       playClick(250);
     });
     
-    // Устанавливаем начальную метку кнопки
-    rawTextToggle.textContent = showingOriginal ? 'Оригинал' : 'Переведено';
+    // Set initial button label
+    rawTextToggle.textContent = showingOriginal ? 'Original' : 'Translated';
   }
 }
 
@@ -1556,71 +1556,71 @@ els.chatSendBtn.addEventListener("click", async () => {
   }
   
   if (!currentPdfFile && !extractedData) {
-    log("❌ Сначала загрузите и обработайте файл");
+    log("❌ Please load and process a file first");
     playClick(250);
     return;
   }
   
-  // Добавляем вопрос пользователя в чат
+  // Add user question to chat
   const userMessage = document.createElement('div');
   userMessage.className = 'chat-message user';
-  userMessage.innerHTML = `<strong>Вы:</strong><br>${question}`;
+  userMessage.innerHTML = `<strong>You:</strong><br>${question}`;
   els.chatMessages.appendChild(userMessage);
   els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
   
   els.chatInput.value = '';
-  els.status.textContent = "🤔 Отправка вопроса...";
-  log(`💬 Вопрос: ${question}`);
+  els.status.textContent = "🤔 Sending question...";
+  log(`💬 Question: ${question}`);
   
   playClick(400);
   
   try {
-    // Получаем извлеченный текст из разных источников
+    // Get extracted text from different sources
     let extractedText = '';
     
-    // Приоритет 1: ocrResult.text - оригинальный текст из OCR
+    // Priority 1: ocrResult.text - original text from OCR
     if (ocrResult && ocrResult.text) {
       extractedText = ocrResult.text;
-      log(`💬 Используем текст из ocrResult (${extractedText.length} символов)`);
+      log(`💬 Using text from ocrResult (${extractedText.length} characters)`);
     }
-    // Приоритет 2: extractedData.rawText - текст из извлеченных данных
+    // Priority 2: extractedData.rawText - text from extracted data
     else if (extractedData && extractedData.rawText) {
       extractedText = extractedData.rawText;
       log(`💬 Используем текст из extractedData.rawText (${extractedText.length} символов)`);
     }
-    // Приоритет 3: translatedData.rawText - текст из PROCESSING RESULTS
+    // Priority 3: translatedData.rawText - text from PROCESSING RESULTS
     else if (translatedData && translatedData.rawText) {
       extractedText = translatedData.rawText;
-      log(`💬 Используем текст из translatedData.rawText (${extractedText.length} символов)`);
+      log(`💬 Using text from translatedData.rawText (${extractedText.length} characters)`);
     }
-    // Приоритет 3: extractedData.rawText - если есть
+    // Priority 3: extractedData.rawText - if available
     else if (extractedData && extractedData.rawText) {
       extractedText = extractedData.rawText;
       log(`💬 Используем текст из extractedData.rawText (${extractedText.length} символов)`);
     }
-    // Приоритет 4: Собираем текст из extractedData (структурированные данные)
+    // Priority 4: Collect text from extractedData (structured data)
     else if (extractedData && typeof extractedData === 'object') {
-      // Собираем весь текст из всех полей extractedData
+      // Collect all text from all extractedData fields
       const textParts = [];
       if (extractedData.materials && extractedData.materials.length > 0) {
-        textParts.push(`Материалы: ${extractedData.materials.join(', ')}`);
+        textParts.push(`Materials: ${extractedData.materials.join(', ')}`);
       }
       if (extractedData.standards && extractedData.standards.length > 0) {
-        textParts.push(`Стандарты: ${extractedData.standards.join(', ')}`);
+        textParts.push(`Standards: ${extractedData.standards.join(', ')}`);
       }
       if (extractedData.raValues && extractedData.raValues.length > 0) {
-        textParts.push(`Шероховатость: Ra ${extractedData.raValues.join(', Ra ')}`);
+        textParts.push(`Roughness: Ra ${extractedData.raValues.join(', Ra ')}`);
       }
       if (extractedData.fits && extractedData.fits.length > 0) {
-        textParts.push(`Посадки: ${extractedData.fits.join(', ')}`);
+        textParts.push(`Fits: ${extractedData.fits.join(', ')}`);
       }
       if (extractedData.heatTreatment && extractedData.heatTreatment.length > 0) {
-        textParts.push(`Термообработка: ${extractedData.heatTreatment.join(', ')}`);
+        textParts.push(`Heat Treatment: ${extractedData.heatTreatment.join(', ')}`);
       }
       extractedText = textParts.join('\n') || JSON.stringify(extractedData);
-      log(`💬 Используем собранный текст из extractedData (${extractedText.length} символов)`);
+      log(`💬 Using collected text from extractedData (${extractedText.length} characters)`);
     }
-    // Fallback: пытаемся получить текст из панели PROCESSING RESULTS
+    // Fallback: try to get text from PROCESSING RESULTS panel
     if (!extractedText || extractedText.length < 10) {
       if (els.resultsList) {
         const rawTextElement = els.resultsList.querySelector('div[style*="Raw OCR Text"], div[style*="rawText"]');
